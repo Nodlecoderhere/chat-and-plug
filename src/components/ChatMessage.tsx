@@ -6,6 +6,7 @@ interface ChatMessageProps {
   message: Message;
   isCurrentUser: boolean;
   currentNickname?: string;
+  currentUserAvatarUrl?: string;
   showAvatar?: boolean;
   onReact?: (messageId: string, emoji: string) => void;
   onReply?: (message: Message) => void;
@@ -16,6 +17,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   message,
   isCurrentUser,
   currentNickname,
+  currentUserAvatarUrl,
   showAvatar = true,
   onReact,
   onReply,
@@ -23,12 +25,15 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [reportState, setReportState] = useState(false);
+  const [showMobileToolbar, setShowMobileToolbar] = useState(false);
 
   const isReplyToMe = Boolean(
     message.reply_to &&
     currentNickname &&
     message.reply_to.nickname.trim().toLowerCase() === currentNickname.trim().toLowerCase()
   );
+
+  const effectiveAvatarUrl = message.avatar_url || (isCurrentUser ? currentUserAvatarUrl : undefined);
 
   // System notification badge
   if (message.is_system) {
@@ -92,9 +97,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     >
       {/* Sender Avatar */}
       {showAvatar ? (
-        message.avatar_url ? (
+        effectiveAvatarUrl ? (
           <img
-            src={message.avatar_url}
+            src={effectiveAvatarUrl}
             alt={message.nickname}
             className="h-8 w-8 shrink-0 rounded-full object-cover shadow-sm border border-[#383a3d]"
           />
@@ -160,7 +165,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
         {/* Google Messages Bubble Shape */}
         <div
-          className={`relative px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm transition-all ${
+          onClick={() => setShowMobileToolbar((prev) => !prev)}
+          className={`relative px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm transition-all cursor-pointer ${
             isCurrentUser
               ? 'pixel-bubble-user bg-[#004a77] text-[#c2e7ff] rounded-[22px] rounded-br-[4px]'
               : 'pixel-bubble-other bg-[#282a2d] text-[#e3e2e6] rounded-[22px] rounded-bl-[4px]'
@@ -173,6 +179,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
               {formatTime(message.created_at)}
             </span>
           )}
+        </div>
+
+        {/* Quick inline mobile/touch Reply button */}
+        <div className="mt-1 flex items-center gap-2">
+          <button
+            onClick={() => onReply?.(message)}
+            className="flex items-center gap-1 text-[10px] font-bold text-[#8e9099] hover:text-[#a8c7fa] transition px-1 py-0.5 rounded-full hover:bg-[#282a2d]"
+          >
+            <Reply className="h-3 w-3 text-[#a8c7fa]" />
+            <span>Reply</span>
+          </button>
         </div>
 
         {/* Emoji Reactions display */}
@@ -192,17 +209,22 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         )}
       </div>
 
-      {/* Hover action toolbar */}
-      <div className={`absolute top-0 hidden group-hover:flex items-center gap-1 rounded-full bg-[#282a2d] border border-[#383a3d] px-2 py-1 shadow-lg z-10 ${
+      {/* Hover or Tap action toolbar */}
+      <div className={`absolute top-0 ${
+        showMobileToolbar ? 'flex' : 'hidden group-hover:flex'
+      } items-center gap-1 rounded-full bg-[#282a2d] border border-[#383a3d] px-2 py-1 shadow-lg z-10 ${
         isCurrentUser ? 'right-12' : 'left-12'
       }`}>
         <button
-          onClick={() => onReply?.(message)}
+          onClick={() => {
+            onReply?.(message);
+            setShowMobileToolbar(false);
+          }}
           className="rounded-full p-1 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#a8c7fa] transition flex items-center gap-1 text-xs px-1.5 font-bold"
           title="Reply to message"
         >
           <Reply className="h-3.5 w-3.5 text-[#a8c7fa]" />
-          <span className="text-[10px] hidden sm:inline">Reply</span>
+          <span className="text-[10px]">Reply</span>
         </button>
 
         <div className="h-3 w-[1px] bg-[#383a3d] my-auto mx-0.5" />
@@ -210,7 +232,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         {['👍', '🔥', '❤️', '😂', '🚀', '💀'].map((emoji) => (
           <button
             key={emoji}
-            onClick={() => onReact?.(message.id, emoji)}
+            onClick={() => {
+              onReact?.(message.id, emoji);
+              setShowMobileToolbar(false);
+            }}
             className="rounded-full p-1 text-xs hover:bg-[#383a3d] transition transform hover:scale-125"
             title={`React with ${emoji}`}
           >
@@ -221,7 +246,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         <div className="h-3 w-[1px] bg-[#383a3d] my-auto mx-0.5" />
 
         <button
-          onClick={handleCopy}
+          onClick={() => {
+            handleCopy();
+            setShowMobileToolbar(false);
+          }}
           className="rounded-full p-1 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#e3e2e6] transition"
           title="Copy message"
         >
@@ -232,6 +260,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           onClick={() => {
             setReportState(true);
             setTimeout(() => setReportState(false), 2500);
+            setShowMobileToolbar(false);
           }}
           className="rounded-full p-1 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#fdd663] transition"
           title="Flag message"

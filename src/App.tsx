@@ -153,6 +153,7 @@ export default function App() {
           messages={messages}
           currentVisitorId={visitorId}
           currentNickname={nickname}
+          currentUserAvatarUrl={avatarUrl}
           hasMoreOlder={hasMoreOlder}
           isLoadingOlder={isLoadingOlder}
           onLoadOlder={loadOlderMessages}

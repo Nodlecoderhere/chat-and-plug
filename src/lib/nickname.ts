@@ -103,7 +103,7 @@ export function sanitizeNickname(input: string): string {
 }
 
 /**
- * Resizes and crops any uploaded user image file into a crisp 512x512 square data URL
+ * Resizes and crops any uploaded user image file into an optimized 256x256 square data URL (~10-15KB)
  */
 export function processProfilePicture(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -116,23 +116,27 @@ export function processProfilePicture(file: File): Promise<string> {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
+        canvas.width = 256;
+        canvas.height = 256;
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
           return reject(new Error('Failed to create canvas context'));
         }
 
+        // High quality image smoothing
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
         // Center square crop
         const minDim = Math.min(img.width, img.height);
         const sx = (img.width - minDim) / 2;
         const sy = (img.height - minDim) / 2;
 
-        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 512, 512);
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 256, 256);
 
-        // Convert to optimized JPEG data URL
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        // Convert to optimized JPEG data URL (~10-15KB string)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
         resolve(dataUrl);
       };
       img.onerror = () => reject(new Error('Failed to process image file'));

@@ -382,6 +382,14 @@ export function useGlobalChat(
       const client = getSupabaseClient();
       const creds = getSupabaseCredentials();
 
+      const cleanReplyTo: MessageReply | undefined = replyTo
+        ? {
+            id: replyTo.id,
+            nickname: replyTo.nickname,
+            content: replyTo.content
+          }
+        : undefined;
+
       const newMsg: Message = {
         id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
         nickname: currentNickname,
@@ -390,7 +398,7 @@ export function useGlobalChat(
         created_at: new Date().toISOString(),
         avatar_color: getRandomAvatarColor(visitorId),
         avatar_url: avatarUrl || undefined,
-        reply_to: replyTo
+        reply_to: cleanReplyTo
       };
 
       if (creds.isConfigured && client) {
@@ -405,8 +413,8 @@ export function useGlobalChat(
           if (avatarUrl) {
             insertData.avatar_url = avatarUrl;
           }
-          if (replyTo) {
-            insertData.reply_to = replyTo;
+          if (cleanReplyTo) {
+            insertData.reply_to = cleanReplyTo;
           }
 
           let { error: insertErr } = await client.from('messages').insert([insertData]);
