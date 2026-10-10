@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useGlobalChat } from './hooks/useGlobalChat';
-import { usePresence } from './hooks/usePresence';
 import {
   getOrCreateVisitorId,
   getStoredNickname
@@ -24,7 +23,7 @@ export default function App() {
   const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
 
-  // Custom hook for global real-time chat
+  // Custom hook for global real-time chat, typing, and presence
   const {
     messages,
     status,
@@ -34,11 +33,10 @@ export default function App() {
     hasMoreOlder,
     isLoadingOlder,
     sendTypingSignal,
-    typingUsers
+    typingUsers,
+    onlineUsers,
+    onlineCount
   } = useGlobalChat(visitorId, nickname, soundEnabled);
-
-  // Custom hook for presence tracking
-  const { onlineUsers, onlineCount } = usePresence(visitorId, nickname);
 
   // Sound toggle handler
   const handleToggleSound = () => {

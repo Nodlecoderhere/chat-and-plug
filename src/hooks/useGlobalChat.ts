@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Message, ConnectionStatus } from '../types/chat';
+import { Message, ConnectionStatus, UserPresence } from '../types/chat';
 import { getSupabaseClient, getSupabaseCredentials } from '../lib/supabase';
 import { playMessageSound } from '../lib/sound';
 import { getRandomAvatarColor } from '../lib/nickname';
@@ -36,6 +36,10 @@ export function useGlobalChat(
   const [hasMoreOlder, setHasMoreOlder] = useState<boolean>(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState<boolean>(false);
 
+  // Online Presence state
+  const [onlineUsers, setOnlineUsers] = useState<UserPresence[]>([]);
+  const [onlineCount, setOnlineCount] = useState<number>(1);
+
   // Typing indicators state
   const [typingMap, setTypingMap] = useState<Map<string, { nickname: string; timestamp: number }>>(new Map());
 
@@ -58,7 +62,7 @@ export function useGlobalChat(
     });
   }, [visitorId]);
 
-  // Periodic cleanup of stale typing indicators (>3 seconds old)
+  // Periodic cleanup of stale typing indicators (>3.2 seconds old)
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
@@ -78,7 +82,7 @@ export function useGlobalChat(
     return () => clearInterval(interval);
   }, []);
 
-  // Initialize or fetch messages
+  // Single unified Realtime Channel Initialization
   useEffect(() => {
     const creds = getSupabaseCredentials();
     const client = getSupabaseClient();
@@ -119,9 +123,25 @@ export function useGlobalChat(
 
       fetchInitialMessages();
 
-      // Subscribe to Realtime Postgres INSERT changes and typing broadcast events
-      const channel = client
-        .channel(CHANNEL_NAME)
+      // Create SINGLE unified channel for messages, broadcast typing, and presence
+      const channel = client.channel(CHANNEL_NAME, {
+        config: {
+          presence: {
+            key: visitorId
+          }
+        }
+      });
+
+      const myPresenceState: UserPresence = {
+        visitor_id: visitorId,
+        nickname: currentNickname,
+        joined_at: new Date().toISOString(),
+        avatar_color: getRandomAvatarColor(visitorId)
+      };
+
+      // Register ALL event handlers BEFORE calling .subscribe()
+      channel
+        // 1. Postgres INSERT changes for new messages
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'messages' },
@@ -135,21 +155,46 @@ export function useGlobalChat(
               return [...prev, newMsg];
             });
 
-            // When new message arrives from sender, clear their typing status
             updateTypingStatus(newMsg.visitor_id, newMsg.nickname, false);
           }
         )
+        // 2. Broadcast events for typing indicators
         .on('broadcast', { event: 'typing' }, (payload) => {
           if (payload.payload) {
-            const { visitor_id, nickname, is_typing } = payload.payload;
-            updateTypingStatus(visitor_id, nickname, Boolean(is_typing));
+            const { visitor_id, nickname: nick, is_typing } = payload.payload;
+            updateTypingStatus(visitor_id, nick, Boolean(is_typing));
           }
         })
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
+        // 3. Presence sync for online users tracking
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState<UserPresence>();
+          const userList: UserPresence[] = [];
+
+          Object.keys(state).forEach((key) => {
+            const presences = state[key];
+            if (presences && presences.length > 0) {
+              const latest = presences[presences.length - 1];
+              userList.push({
+                ...latest,
+                is_current_user: latest.visitor_id === visitorId
+              });
+            }
+          });
+
+          setOnlineUsers(userList);
+          setOnlineCount(userList.length || 1);
+        })
+        // Finally, call subscribe ONCE
+        .subscribe(async (subStatus) => {
+          if (subStatus === 'SUBSCRIBED') {
             setStatus('connected');
             setError(null);
-          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            try {
+              await channel.track(myPresenceState);
+            } catch (trackErr) {
+              console.warn('Presence track warning:', trackErr);
+            }
+          } else if (subStatus === 'CLOSED' || subStatus === 'CHANNEL_ERROR') {
             setStatus('reconnecting');
           }
         });
@@ -157,6 +202,7 @@ export function useGlobalChat(
       supabaseChannelRef.current = channel;
 
       return () => {
+        channel.untrack();
         client.removeChannel(channel);
       };
     } else {
@@ -177,9 +223,33 @@ export function useGlobalChat(
         localStorage.setItem(LOCAL_STORAGE_MESSAGES_KEY, JSON.stringify(INITIAL_DEMO_MESSAGES));
       }
 
+      // Self presence for fallback mode
+      const localSelf: UserPresence = {
+        visitor_id: visitorId,
+        nickname: currentNickname,
+        joined_at: new Date().toISOString(),
+        avatar_color: getRandomAvatarColor(visitorId),
+        is_current_user: true
+      };
+      setOnlineUsers([localSelf]);
+      setOnlineCount(1);
+
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         const bc = new BroadcastChannel('plug_chat_mesh');
         broadcastChannelRef.current = bc;
+
+        const activePresenceMap = new Map<string, UserPresence>();
+        activePresenceMap.set(visitorId, localSelf);
+
+        const sendPresencePing = () => {
+          bc.postMessage({
+            type: 'PRESENCE_PING',
+            user: { ...localSelf, nickname: currentNickname }
+          });
+        };
+
+        sendPresencePing();
+        const pingInterval = setInterval(sendPresencePing, 3000);
 
         bc.onmessage = (event) => {
           if (event.data) {
@@ -196,14 +266,30 @@ export function useGlobalChat(
               });
               updateTypingStatus(newMsg.visitor_id, newMsg.nickname, false);
             } else if (event.data.type === 'TYPING') {
-              const { visitor_id, nickname, is_typing } = event.data;
-              updateTypingStatus(visitor_id, nickname, Boolean(is_typing));
+              const { visitor_id, nickname: nick, is_typing } = event.data;
+              updateTypingStatus(visitor_id, nick, Boolean(is_typing));
+            } else if (event.data.type === 'PRESENCE_PING') {
+              const remoteUser = event.data.user as UserPresence;
+              activePresenceMap.set(remoteUser.visitor_id, remoteUser);
+
+              const userArray = Array.from(activePresenceMap.values()).map((u) => ({
+                ...u,
+                is_current_user: u.visitor_id === visitorId
+              }));
+
+              setOnlineUsers(userArray);
+              setOnlineCount(userArray.length);
             }
           }
         };
+
+        return () => {
+          clearInterval(pingInterval);
+          bc.close();
+        };
       }
     }
-  }, [visitorId, soundEnabled, updateTypingStatus]);
+  }, [visitorId, currentNickname, soundEnabled, updateTypingStatus]);
 
   // Method to send typing signal
   const sendTypingSignal = useCallback((isTyping: boolean) => {
@@ -228,24 +314,6 @@ export function useGlobalChat(
       });
     }
   }, [visitorId, currentNickname]);
-
-  // Handle nickname change notification
-  const notifyNicknameChange = useCallback((oldNick: string, newNick: string) => {
-    const sysMsg: Message = {
-      id: 'sys_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      nickname: 'System',
-      visitor_id: 'v_system',
-      content: `✏️ ${oldNick} is now known as ${newNick}`,
-      created_at: new Date().toISOString(),
-      is_system: true
-    };
-
-    setMessages((prev) => [...prev, sysMsg]);
-
-    if (broadcastChannelRef.current) {
-      broadcastChannelRef.current.postMessage({ type: 'NEW_MESSAGE', message: sysMsg });
-    }
-  }, []);
 
   // Send message method
   const sendMessage = useCallback(
@@ -371,8 +439,9 @@ export function useGlobalChat(
     loadOlderMessages,
     hasMoreOlder,
     isLoadingOlder,
-    notifyNicknameChange,
     sendTypingSignal,
-    typingUsers
+    typingUsers,
+    onlineUsers,
+    onlineCount
   };
 }
