@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #131314;
+    color: #e3e2e6;
+    font-family: 'Google Sans Text', 'Google Sans', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  }
+}
+
+/* Material You Pixel Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #131314;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #282a2d;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8c7fa;
+}
+
+/* Material You Card & Panel Classes */
+.pixel-card {
+  background: #1e1f20;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 28px;
+}
+
+.pixel-card-high {
+  background: #282a2d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+}
+
+.pixel-pill {
+  border-radius: 9999px;
+}
+
+.pixel-surface-dim {
+  background-color: #181819;
+}
+
+/* Material 3 User & Other Message Bubbles */
+.pixel-bubble-user {
+  background-color: #004a77;
+  color: #c2e7ff;
+  border-radius: 24px;
+  border-bottom-right-radius: 6px;
+}
+
+.pixel-bubble-other {
+  background-color: #282a2d;
+  color: #e3e2e6;
+  border-radius: 24px;
+  border-bottom-left-radius: 6px;
+}
+
+/* Google Pixel Glow & Ripple */
+.pixel-chip-blue {
+  background-color: #004a77;
+  color: #c2e7ff;
+}
+
+.pixel-chip-green {
+  background-color: #0f5223;
+  color: #c2ebd0;
+}
+
+.pixel-chip-amber {
+  background-color: #4a3800;
+  color: #ffe088;
+}
+
+/* Material Floating Elevation */
+.pixel-elevation-1 {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+}
+
+.pixel-elevation-2 {
+  box-shadow: 0 2px 6px 2px rgba(0, 0, 0, 0.3), 0 8px 12px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Keyframes */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(0.98); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+

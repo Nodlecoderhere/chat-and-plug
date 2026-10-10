@@ -1,0 +1,6 @@
+{
+  "name": "Plug & Chat",
+  "description": "A real-time, account-free, global chat platform where anyone can join and converse instantly in one shared space.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
