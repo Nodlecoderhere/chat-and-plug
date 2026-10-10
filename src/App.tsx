@@ -1,9 +1,12 @@
 import { useState, useCallback } from 'react';
 import { useGlobalChat } from './hooks/useGlobalChat';
+import { Message, MessageReply } from './types/chat';
 import {
   getOrCreateVisitorId,
   getStoredNickname,
-  setStoredNickname
+  setStoredNickname,
+  getStoredAvatarUrl,
+  setStoredAvatarUrl
 } from './lib/nickname';
 import { Header } from './components/Header';
 import { MessageList } from './components/MessageList';
@@ -15,6 +18,7 @@ import { SettingsModal } from './components/SettingsModal';
 export default function App() {
   const [visitorId] = useState<string>(() => getOrCreateVisitorId());
   const [nickname, setNickname] = useState<string>(() => getStoredNickname());
+  const [avatarUrl, setAvatarUrl] = useState<string>(() => getStoredAvatarUrl());
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     return localStorage.getItem('plug_chat_sound') !== 'false';
   });
@@ -33,6 +37,9 @@ export default function App() {
     return saved ? parseFloat(saved) : 0.5;
   });
 
+  // Replying state
+  const [replyingTo, setReplyingTo] = useState<MessageReply | null>(null);
+
   // Modal visibility states
   const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -50,7 +57,7 @@ export default function App() {
     typingUsers,
     onlineUsers,
     onlineCount
-  } = useGlobalChat(visitorId, nickname, soundEnabled);
+  } = useGlobalChat(visitorId, nickname, avatarUrl, soundEnabled);
 
   // Sound toggle handler
   const handleToggleSound = () => {
@@ -61,6 +68,31 @@ export default function App() {
     });
   };
 
+  // Reply handlers
+  const handleReply = useCallback((msg: Message) => {
+    setReplyingTo({
+      id: msg.id,
+      nickname: msg.nickname,
+      content: msg.content,
+      avatar_url: msg.avatar_url
+    });
+  }, []);
+
+  const handleCancelReply = useCallback(() => {
+    setReplyingTo(null);
+  }, []);
+
+  const handleScrollToMessage = useCallback((messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-2', 'ring-[#a8c7fa]', 'bg-[#282a2d]');
+      setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-[#a8c7fa]', 'bg-[#282a2d]');
+      }, 1500);
+    }
+  }, []);
+
   // Change Nickname handler (visible to all)
   const handleSaveNickname = useCallback((newNick: string) => {
     if (newNick && newNick !== nickname) {
@@ -68,6 +100,12 @@ export default function App() {
       setNickname(newNick);
     }
   }, [nickname]);
+
+  // Change Avatar URL handler (visible to all on new messages & presence)
+  const handleChangeAvatarUrl = useCallback((url: string) => {
+    setStoredAvatarUrl(url);
+    setAvatarUrl(url);
+  }, []);
 
   // Change Accent Color handler (user side only)
   const handleChangeAccentColor = useCallback((color: string) => {
@@ -94,6 +132,7 @@ export default function App() {
       <Header
         onlineCount={onlineCount}
         nickname={nickname}
+        avatarUrl={avatarUrl}
         soundEnabled={soundEnabled}
         onToggleSound={handleToggleSound}
         onOpenParticipantsModal={() => setIsParticipantsModalOpen(true)}
@@ -116,6 +155,8 @@ export default function App() {
           hasMoreOlder={hasMoreOlder}
           isLoadingOlder={isLoadingOlder}
           onLoadOlder={loadOlderMessages}
+          onReply={handleReply}
+          onScrollToMessage={handleScrollToMessage}
           chatBgImage={chatBgImage}
           chatBgOpacity={chatBgOpacity}
         />
@@ -128,6 +169,8 @@ export default function App() {
           onSendMessage={sendMessage}
           onTyping={sendTypingSignal}
           disabled={status === 'disconnected'}
+          replyingTo={replyingTo}
+          onCancelReply={handleCancelReply}
         />
       </main>
 
@@ -143,6 +186,8 @@ export default function App() {
         onClose={() => setIsSettingsModalOpen(false)}
         currentNickname={nickname}
         onSaveNickname={handleSaveNickname}
+        avatarUrl={avatarUrl}
+        onChangeAvatarUrl={handleChangeAvatarUrl}
         accentColor={accentColor}
         onChangeAccentColor={handleChangeAccentColor}
         chatBgImage={chatBgImage}

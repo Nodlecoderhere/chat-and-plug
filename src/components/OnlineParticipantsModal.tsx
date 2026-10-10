@@ -69,9 +69,17 @@ export const OnlineParticipantsModal: React.FC<OnlineParticipantsModalProps> = (
               className="flex items-center justify-between rounded-2xl bg-[#282a2d] p-3 transition hover:bg-[#333538]"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#004a77] text-xs font-bold text-[#c2e7ff] font-['Google_Sans']">
-                  {u.nickname.charAt(0).toUpperCase()}
-                </div>
+                {u.avatar_url ? (
+                  <img
+                    src={u.avatar_url}
+                    alt={u.nickname}
+                    className="h-9 w-9 shrink-0 rounded-full object-cover border border-[#a8c7fa]"
+                  />
+                ) : (
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#004a77] text-xs font-bold text-[#c2e7ff] font-['Google_Sans'] shrink-0">
+                    {u.nickname.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold font-mono text-[#e3e2e6]">

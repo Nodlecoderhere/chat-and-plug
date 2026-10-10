@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Message, ConnectionStatus, UserPresence } from '../types/chat';
+import { Message, ConnectionStatus, UserPresence, MessageReply } from '../types/chat';
 import { getSupabaseClient, getSupabaseCredentials } from '../lib/supabase';
 import { playMessageSound } from '../lib/sound';
 import { getRandomAvatarColor } from '../lib/nickname';
@@ -12,21 +12,13 @@ export interface TypingUser {
   nickname: string;
 }
 
-// Initial welcome message for fallback mode
-const INITIAL_DEMO_MESSAGES: Message[] = [
-  {
-    id: 'demo-3',
-    nickname: 'PlugBot',
-    visitor_id: 'v_system',
-    content: '⚡ Welcome to Plug & Chat! Everyone on this website shares this chat. Connect your own Supabase project in Settings for global cloud sync.',
-    created_at: new Date().toISOString(),
-    is_system: true
-  }
-];
+// Initial demo messages (empty by default as per user request)
+const INITIAL_DEMO_MESSAGES: Message[] = [];
 
 export function useGlobalChat(
   visitorId: string,
   currentNickname: string,
+  avatarUrl: string = '',
   soundEnabled: boolean = true
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -123,6 +115,13 @@ export function useGlobalChat(
 
       fetchInitialMessages();
 
+      // Ensure clean channel setup: remove any pre-existing channel before creating new subscription
+      const existingChannels = client.getChannels();
+      const existing = existingChannels.find((ch) => ch.topic === `realtime:${CHANNEL_NAME}`);
+      if (existing) {
+        client.removeChannel(existing);
+      }
+
       // Create SINGLE unified channel for messages, broadcast typing, and presence
       const channel = client.channel(CHANNEL_NAME, {
         config: {
@@ -136,7 +135,8 @@ export function useGlobalChat(
         visitor_id: visitorId,
         nickname: currentNickname,
         joined_at: new Date().toISOString(),
-        avatar_color: getRandomAvatarColor(visitorId)
+        avatar_color: getRandomAvatarColor(visitorId),
+        avatar_url: avatarUrl
       };
 
       // Register ALL event handlers BEFORE calling .subscribe()
@@ -229,6 +229,7 @@ export function useGlobalChat(
         nickname: currentNickname,
         joined_at: new Date().toISOString(),
         avatar_color: getRandomAvatarColor(visitorId),
+        avatar_url: avatarUrl,
         is_current_user: true
       };
       setOnlineUsers([localSelf]);
@@ -244,7 +245,7 @@ export function useGlobalChat(
         const sendPresencePing = () => {
           bc.postMessage({
             type: 'PRESENCE_PING',
-            user: { ...localSelf, nickname: currentNickname }
+            user: { ...localSelf, nickname: currentNickname, avatar_url: avatarUrl }
           });
         };
 
@@ -289,7 +290,7 @@ export function useGlobalChat(
         };
       }
     }
-  }, [visitorId, currentNickname, soundEnabled, updateTypingStatus]);
+  }, [visitorId, currentNickname, avatarUrl, soundEnabled, updateTypingStatus]);
 
   // Method to send typing signal
   const sendTypingSignal = useCallback((isTyping: boolean) => {
@@ -317,7 +318,7 @@ export function useGlobalChat(
 
   // Send message method
   const sendMessage = useCallback(
-    async (content: string): Promise<{ success: boolean; error?: string }> => {
+    async (content: string, replyTo?: MessageReply): Promise<{ success: boolean; error?: string }> => {
       const trimmed = content.trim();
       if (!trimmed) {
         return { success: false, error: 'Message cannot be empty.' };
@@ -345,20 +346,41 @@ export function useGlobalChat(
         visitor_id: visitorId,
         content: trimmed,
         created_at: new Date().toISOString(),
-        avatar_color: getRandomAvatarColor(visitorId)
+        avatar_color: getRandomAvatarColor(visitorId),
+        avatar_url: avatarUrl || undefined,
+        reply_to: replyTo
       };
 
       if (creds.isConfigured && client) {
         try {
-          const { error: insertErr } = await client.from('messages').insert([
-            {
+          const insertData: Record<string, unknown> = {
+            id: newMsg.id,
+            nickname: newMsg.nickname,
+            visitor_id: newMsg.visitor_id,
+            content: newMsg.content,
+            avatar_color: newMsg.avatar_color
+          };
+          if (avatarUrl) {
+            insertData.avatar_url = avatarUrl;
+          }
+          if (replyTo) {
+            insertData.reply_to = replyTo;
+          }
+
+          let { error: insertErr } = await client.from('messages').insert([insertData]);
+
+          if (insertErr && (insertErr.message?.includes('column') || insertErr.code === 'PGRST204')) {
+            // Fallback insert without optional columns if column doesn't exist
+            const fallbackData = {
               id: newMsg.id,
               nickname: newMsg.nickname,
               visitor_id: newMsg.visitor_id,
               content: newMsg.content,
               avatar_color: newMsg.avatar_color
-            }
-          ]);
+            };
+            const retry = await client.from('messages').insert([fallbackData]);
+            insertErr = retry.error;
+          }
 
           if (insertErr) {
             console.error('Supabase insert error:', insertErr);
@@ -389,7 +411,7 @@ export function useGlobalChat(
         return { success: true };
       }
     },
-    [currentNickname, visitorId, sendTypingSignal]
+    [currentNickname, visitorId, avatarUrl, sendTypingSignal]
   );
 
   // Load older messages for pagination

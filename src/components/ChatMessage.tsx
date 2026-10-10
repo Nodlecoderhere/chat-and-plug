@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Message } from '../types/chat';
-import { Copy, Check, AlertCircle, Sparkles } from 'lucide-react';
+import { Copy, Check, AlertCircle, Sparkles, Reply } from 'lucide-react';
 
 interface ChatMessageProps {
   message: Message;
   isCurrentUser: boolean;
   showAvatar?: boolean;
   onReact?: (messageId: string, emoji: string) => void;
+  onReply?: (message: Message) => void;
+  onScrollToMessage?: (messageId: string) => void;
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -14,6 +16,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   isCurrentUser,
   showAvatar = true,
   onReact,
+  onReply,
+  onScrollToMessage,
 }) => {
   const [copied, setCopied] = useState(false);
   const [reportState, setReportState] = useState(false);
@@ -21,7 +25,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   // System notification badge
   if (message.is_system) {
     return (
-      <div className="my-3 flex justify-center px-4">
+      <div id={`msg-${message.id}`} className="my-3 flex justify-center px-4">
         <div className="flex items-center gap-2 rounded-full bg-[#282a2d] px-4 py-1.5 text-xs font-medium text-[#a8c7fa]">
           <Sparkles className="h-3.5 w-3.5 text-[#8ab4f8]" />
           <span className="font-['Google_Sans_Text']">{message.content}</span>
@@ -73,19 +77,28 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   return (
     <div
-      className={`group relative flex w-full items-end gap-2.5 my-1.5 px-2 ${
+      id={`msg-${message.id}`}
+      className={`group relative flex w-full items-end gap-2.5 my-1.5 px-2 transition-colors duration-500 rounded-2xl ${
         isCurrentUser ? 'flex-row-reverse' : 'flex-row'
       }`}
     >
       {/* Sender Avatar */}
       {showAvatar ? (
-        <div
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm font-['Google_Sans'] ${
-            isCurrentUser ? 'bg-[#004a77] text-[#c2e7ff]' : 'bg-[#384766] text-[#d3e3fd]'
-          }`}
-        >
-          {initial}
-        </div>
+        message.avatar_url ? (
+          <img
+            src={message.avatar_url}
+            alt={message.nickname}
+            className="h-8 w-8 shrink-0 rounded-full object-cover shadow-sm border border-[#383a3d]"
+          />
+        ) : (
+          <div
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm font-['Google_Sans'] ${
+              isCurrentUser ? 'bg-[#004a77] text-[#c2e7ff]' : 'bg-[#384766] text-[#d3e3fd]'
+            }`}
+          >
+            {initial}
+          </div>
+        )
       ) : (
         <div className="w-8 shrink-0" />
       )}
@@ -103,6 +116,26 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
               </span>
             )}
             <span className="text-[10px] text-[#8e9099]">{formatTime(message.created_at)}</span>
+          </div>
+        )}
+
+        {/* Quoted parent message box if this is a reply */}
+        {message.reply_to && (
+          <div
+            onClick={() => onScrollToMessage?.(message.reply_to!.id)}
+            className={`mb-1 cursor-pointer max-w-full rounded-2xl border-l-4 px-3 py-1.5 text-xs shadow-sm transition hover:opacity-90 active:scale-98 ${
+              isCurrentUser
+                ? 'bg-[#00315a]/80 border-[#a8c7fa] text-[#d3e3fd]'
+                : 'bg-[#1e1f20] border-[#a8c7fa] text-[#c4c6d0]'
+            }`}
+          >
+            <div className="flex items-center gap-1 text-[11px] font-bold text-[#a8c7fa] font-mono">
+              <Reply className="h-3 w-3 shrink-0" />
+              <span className="truncate">Replying to {message.reply_to.nickname}</span>
+            </div>
+            <p className="line-clamp-2 text-[11px] opacity-80 break-words mt-0.5">
+              {message.reply_to.content}
+            </p>
           </div>
         )}
 
@@ -144,7 +177,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       <div className={`absolute top-0 hidden group-hover:flex items-center gap-1 rounded-full bg-[#282a2d] border border-[#383a3d] px-2 py-1 shadow-lg z-10 ${
         isCurrentUser ? 'right-12' : 'left-12'
       }`}>
-        {['👍', '🔥', '❤️', '😂', '🚀','💀','🤷‍♂️','💦'].map((emoji) => (
+        <button
+          onClick={() => onReply?.(message)}
+          className="rounded-full p-1 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#a8c7fa] transition flex items-center gap-1 text-xs px-1.5 font-bold"
+          title="Reply to message"
+        >
+          <Reply className="h-3.5 w-3.5 text-[#a8c7fa]" />
+          <span className="text-[10px] hidden sm:inline">Reply</span>
+        </button>
+
+        <div className="h-3 w-[1px] bg-[#383a3d] my-auto mx-0.5" />
+
+        {['👍', '🔥', '❤️', '😂', '🚀', '💀'].map((emoji) => (
           <button
             key={emoji}
             onClick={() => onReact?.(message.id, emoji)}

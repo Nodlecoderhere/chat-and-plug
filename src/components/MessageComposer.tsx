@@ -1,10 +1,13 @@
 import React, { useState, useRef, KeyboardEvent } from 'react';
-import { Send, Smile, AlertCircle, Loader2 } from 'lucide-react';
+import { Send, Smile, AlertCircle, Loader2, Reply, X } from 'lucide-react';
+import { MessageReply } from '../types/chat';
 
 interface MessageComposerProps {
-  onSendMessage: (content: string) => Promise<{ success: boolean; error?: string }>;
+  onSendMessage: (content: string, replyTo?: MessageReply) => Promise<{ success: boolean; error?: string }>;
   onTyping?: (isTyping: boolean) => void;
   disabled?: boolean;
+  replyingTo?: MessageReply | null;
+  onCancelReply?: () => void;
 }
 
 const EMOJI_PRESETS = ['👍', '🔥', '❤️', '😂', '🚀', '⚡', '🎉', '💯', '👀', '✨', '👋', '💡', '🤖', '💬', '🌌', '🙌'];
@@ -13,6 +16,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   onSendMessage,
   onTyping,
   disabled = false,
+  replyingTo,
+  onCancelReply,
 }) => {
   const [input, setInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,12 +69,15 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    const result = await onSendMessage(text);
+    const result = await onSendMessage(text, replyingTo || undefined);
 
     if (result.success) {
       setInput('');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
+      }
+      if (onCancelReply) {
+        onCancelReply();
       }
     } else {
       setErrorMsg(result.error || 'Failed to send message.');
@@ -98,6 +106,30 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   return (
     <div className="relative w-full bg-[#1e1f20] border-t border-[#282a2d] p-3 sm:px-6 sm:py-4">
       
+      {/* Replying-To Context Banner */}
+      {replyingTo && (
+        <div className="mb-2.5 flex items-center justify-between rounded-2xl bg-[#282a2d] border-l-4 border-[#a8c7fa] px-4 py-2 text-xs animate-fadeIn">
+          <div className="flex items-center gap-2 min-w-0 pr-2">
+            <Reply className="h-4 w-4 text-[#a8c7fa] shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-[#a8c7fa] font-mono text-[11px]">
+                Replying to {replyingTo.nickname}
+              </span>
+              <span className="truncate text-[#c4c6d0] text-[11px] opacity-80">
+                {replyingTo.content}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onCancelReply}
+            className="rounded-full p-1 text-[#8e9099] hover:bg-[#383a3d] hover:text-white transition"
+            title="Cancel Reply"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Rate limit / Error notice */}
       {errorMsg && (
         <div className="mb-2 flex items-center justify-between rounded-2xl bg-[#3c1414] border border-[#f2b8b5]/30 px-4 py-2 text-xs text-[#f2b8b5]">
@@ -168,7 +200,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           onClick={handleSubmit}
           disabled={!input.trim() || isOverLimit || isSubmitting || disabled}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#a8c7fa] text-[#00315a] shadow-md transition hover:scale-105 active:scale-95 disabled:opacity-30 disabled:hover:scale-100"
-          title="Send Message (Enter)"
+          title="Send Message"
         >
           {isSubmitting ? (
             <Loader2 className="h-5 w-5 animate-spin" />

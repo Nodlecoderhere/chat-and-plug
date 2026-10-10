@@ -10,6 +10,8 @@ interface MessageListProps {
   isLoadingOlder?: boolean;
   onLoadOlder?: () => void;
   onReact?: (messageId: string, emoji: string) => void;
+  onReply?: (message: Message) => void;
+  onScrollToMessage?: (messageId: string) => void;
   chatBgImage?: string;
   chatBgOpacity?: number;
 }
@@ -21,6 +23,8 @@ export const MessageList: React.FC<MessageListProps> = ({
   isLoadingOlder,
   onLoadOlder,
   onReact,
+  onReply,
+  onScrollToMessage,
   chatBgImage,
   chatBgOpacity = 0.5,
 }) => {
@@ -184,6 +188,8 @@ export const MessageList: React.FC<MessageListProps> = ({
                 isCurrentUser={msg.visitor_id === currentVisitorId}
                 showAvatar={!isSameSender}
                 onReact={onReact}
+                onReply={onReply}
+                onScrollToMessage={onScrollToMessage}
               />
             </React.Fragment>
           );

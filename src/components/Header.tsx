@@ -11,6 +11,7 @@ import {
 interface HeaderProps {
   onlineCount: number;
   nickname: string;
+  avatarUrl?: string;
   soundEnabled: boolean;
   onToggleSound: () => void;
   onOpenParticipantsModal: () => void;
@@ -21,6 +22,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onlineCount,
   nickname,
+  avatarUrl,
   soundEnabled,
   onToggleSound,
   onOpenParticipantsModal,
@@ -67,11 +69,19 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Nickname Badge / Settings Trigger */}
           <button
             onClick={onOpenSettingsModal}
-            className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition hover:scale-105 active:scale-95"
+            className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition hover:scale-105 active:scale-95"
             style={{ backgroundColor: '#282a2d', color: '#e3e2e6' }}
             title="Click to customize nickname & settings"
           >
-            <Sparkles className="h-3.5 w-3.5" style={{ color: accentColor }} />
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={nickname}
+                className="h-5 w-5 rounded-full object-cover border border-[#a8c7fa]"
+              />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" style={{ color: accentColor }} />
+            )}
             <span className="max-w-[110px] truncate sm:max-w-[150px] font-mono font-bold">
               {nickname}
             </span>

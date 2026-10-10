@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS public.messages (
   visitor_id TEXT NOT NULL,
   content TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  avatar_color TEXT
+  avatar_color TEXT,
+  avatar_url TEXT,
+  reply_to JSONB
 );
 
 -- 2. Performance Indexing

@@ -40,6 +40,7 @@ export function getRandomAvatarColor(seed: string): string {
 const VISITOR_KEY = 'plug_chat_visitor_id';
 const NICKNAME_KEY = 'plug_chat_nickname';
 const COLOR_KEY = 'plug_chat_color';
+const AVATAR_URL_KEY = 'plug_chat_avatar_url';
 
 export function getOrCreateVisitorId(): string {
   let id = localStorage.getItem(VISITOR_KEY);
@@ -75,6 +76,18 @@ export function getStoredAvatarColor(visitorId: string): string {
   return stored;
 }
 
+export function getStoredAvatarUrl(): string {
+  return localStorage.getItem(AVATAR_URL_KEY) || '';
+}
+
+export function setStoredAvatarUrl(url: string): void {
+  if (url) {
+    localStorage.setItem(AVATAR_URL_KEY, url);
+  } else {
+    localStorage.removeItem(AVATAR_URL_KEY);
+  }
+}
+
 export function sanitizeNickname(input: string): string {
   let cleaned = input.trim().replace(/[<>/]/g, '');
   if (cleaned.length > 20) {
@@ -83,9 +96,49 @@ export function sanitizeNickname(input: string): string {
   if (!cleaned) {
     return generateRandomNickname();
   }
-  // Prevent impersonation of system / admin reserved keywords
   if (/^(system|admin|moderator|official|plugchat)$/i.test(cleaned)) {
     return `User_${cleaned}`;
   }
   return cleaned;
+}
+
+/**
+ * Resizes and crops any uploaded user image file into a crisp 512x512 square data URL
+ */
+export function processProfilePicture(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      return reject(new Error('Please select an image file (PNG, JPG, WebP)'));
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          return reject(new Error('Failed to create canvas context'));
+        }
+
+        // Center square crop
+        const minDim = Math.min(img.width, img.height);
+        const sx = (img.width - minDim) / 2;
+        const sy = (img.height - minDim) / 2;
+
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 512, 512);
+
+        // Convert to optimized JPEG data URL
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        resolve(dataUrl);
+      };
+      img.onerror = () => reject(new Error('Failed to process image file'));
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
 }

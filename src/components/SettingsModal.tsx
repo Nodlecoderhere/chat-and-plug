@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { generateRandomNickname, sanitizeNickname } from '../lib/nickname';
+import React, { useState, useRef } from 'react';
+import { generateRandomNickname, sanitizeNickname, processProfilePicture } from '../lib/nickname';
 import { 
   X, 
   Palette, 
@@ -9,7 +9,11 @@ import {
   Check, 
   Trash2,
   Sparkles,
-  Sliders
+  Sliders,
+  Camera,
+  Upload,
+  User,
+  Loader2
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -17,6 +21,8 @@ interface SettingsModalProps {
   onClose: () => void;
   currentNickname: string;
   onSaveNickname: (newNickname: string) => void;
+  avatarUrl: string;
+  onChangeAvatarUrl: (url: string) => void;
   accentColor: string;
   onChangeAccentColor: (color: string) => void;
   chatBgImage: string;
@@ -49,6 +55,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   currentNickname,
   onSaveNickname,
+  avatarUrl,
+  onChangeAvatarUrl,
   accentColor,
   onChangeAccentColor,
   chatBgImage,
@@ -58,14 +66,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [nickInput, setNickInput] = useState(currentNickname);
   const [nickError, setNickError] = useState<string | null>(null);
+  const [currentPfp, setCurrentPfp] = useState<string>(avatarUrl);
+  const [isProcessingPfp, setIsProcessingPfp] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [customBgInput, setCustomBgInput] = useState(chatBgImage);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
   const handleRandomizeNick = () => {
     setNickInput(generateRandomNickname());
     setNickError(null);
+  };
+
+  const handlePfpUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessingPfp(true);
+    setNickError(null);
+
+    try {
+      // Crop and resize to 512x512
+      const processedDataUrl = await processProfilePicture(file);
+      setCurrentPfp(processedDataUrl);
+      onChangeAvatarUrl(processedDataUrl);
+    } catch (err: unknown) {
+      console.error('Failed to process PFP:', err);
+      setNickError(err instanceof Error ? err.message : 'Error uploading profile picture');
+    } finally {
+      setIsProcessingPfp(false);
+    }
+  };
+
+  const handleRemovePfp = () => {
+    setCurrentPfp('');
+    onChangeAvatarUrl('');
   };
 
   const handleSaveAll = () => {
@@ -105,10 +142,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-bold text-[#e3e2e6] font-['Google_Sans']">
-                Preferences &amp; Settings
+                Profile &amp; Appearance Settings
               </h3>
               <p className="text-xs text-[#8e9099]">
-                Customize your nickname, theme color, and chat wallpaper
+                Upload 512x512 profile photo, customize nickname, and change theme
               </p>
             </div>
           </div>
@@ -128,8 +165,76 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         )}
 
-        {/* 1. Change Nickname (Visible to all) */}
+        {/* 1. Profile Picture Upload (512x512) */}
         <div className="space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-[#a8c7fa] flex items-center gap-2 font-['Google_Sans']">
+            <Camera className="h-4 w-4" />
+            <span>Profile Photo (512x512 Square)</span>
+          </h4>
+
+          <div className="flex items-center gap-4 bg-[#282a2d] p-4 rounded-2xl">
+            {/* Avatar Preview */}
+            <div className="relative group shrink-0">
+              {currentPfp ? (
+                <img
+                  src={currentPfp}
+                  alt="Profile Picture"
+                  className="h-20 w-20 rounded-full object-cover border-2 border-[#a8c7fa] shadow-md"
+                />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#004a77] text-white font-bold text-2xl font-['Google_Sans']">
+                  {nickInput.charAt(0).toUpperCase() || <User className="h-10 w-10" />}
+                </div>
+              )}
+
+              {isProcessingPfp && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#a8c7fa]" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 space-y-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePfpUpload}
+                className="hidden"
+              />
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessingPfp}
+                  className="flex items-center gap-2 rounded-full bg-[#a8c7fa] px-4 py-2 text-xs font-bold text-[#00315a] hover:bg-[#c2e7ff] transition"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  <span>{currentPfp ? 'Change Photo (512x512)' : 'Upload Photo'}</span>
+                </button>
+
+                {currentPfp && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePfp}
+                    className="flex items-center gap-1.5 rounded-full bg-[#3c1414] px-3.5 py-2 text-xs font-semibold text-[#f2b8b5] hover:bg-[#4d1818] transition"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Remove</span>
+                  </button>
+                )}
+              </div>
+
+              <p className="text-[11px] text-[#8e9099]">
+                Supports PNG, JPG, or WebP. Auto-crops &amp; resizes to 512x512 px.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Change Nickname (Visible to all) */}
+        <div className="space-y-3 border-t border-[#282a2d] pt-4">
           <h4 className="text-xs font-bold uppercase tracking-wider text-[#a8c7fa] flex items-center gap-2 font-['Google_Sans']">
             <UserCheck className="h-4 w-4" />
             <span>Display Nickname (Visible to all)</span>
@@ -162,14 +267,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
         </div>
 
-        {/* 2. Theme Accent Selector (One-side / User side only) */}
+        {/* 3. Theme Accent Selector */}
         <div className="space-y-3 border-t border-[#282a2d] pt-4">
           <h4 className="text-xs font-bold uppercase tracking-wider text-[#a8c7fa] flex items-center gap-2 font-['Google_Sans']">
             <Palette className="h-4 w-4" />
             <span>Theme Accent Color (User side only)</span>
           </h4>
 
-          {/* Color Preset Chips */}
           <div className="flex flex-wrap gap-2">
             {COLOR_PRESETS.map((preset) => (
               <button
@@ -194,7 +298,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             ))}
           </div>
 
-          {/* Custom Color Picker Input */}
           <div className="flex items-center gap-3 pt-1">
             <label className="text-xs text-[#8e9099] font-medium">Custom Color:</label>
             <div className="flex items-center gap-2">
@@ -209,14 +312,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        {/* 3. Custom Chat Background (User side only) */}
+        {/* 4. Custom Chat Background */}
         <div className="space-y-3 border-t border-[#282a2d] pt-4">
           <h4 className="text-xs font-bold uppercase tracking-wider text-[#a8c7fa] flex items-center gap-2 font-['Google_Sans']">
             <ImageIcon className="h-4 w-4" />
             <span>Custom Chat Background Image (User side only)</span>
           </h4>
 
-          {/* Background Image Presets */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {BG_PRESETS.map((preset) => (
               <button
@@ -237,7 +339,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             ))}
           </div>
 
-          {/* Custom Image URL Input */}
           <div>
             <label className="block text-[11px] text-[#8e9099] mb-1 font-medium">
               Image URL (https://... or data image URL)
@@ -266,7 +367,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Overlay Dimming / Opacity Control */}
           {chatBgImage && (
             <div className="pt-2">
               <div className="flex justify-between text-xs text-[#8e9099] mb-1">
@@ -301,7 +401,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             className="flex items-center gap-2 rounded-full bg-[#a8c7fa] px-6 py-2.5 text-xs font-bold text-[#00315a] hover:bg-[#c2e7ff] transition font-['Google_Sans'] shadow-md"
           >
             <Sparkles className="h-4 w-4" />
-            <span>Apply &amp; Save Settings</span>
+            <span>Save All Settings</span>
           </button>
         </div>
 
