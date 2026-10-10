@@ -1,27 +1,41 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useGlobalChat } from './hooks/useGlobalChat';
 import {
   getOrCreateVisitorId,
-  getStoredNickname
+  getStoredNickname,
+  setStoredNickname
 } from './lib/nickname';
 import { Header } from './components/Header';
 import { MessageList } from './components/MessageList';
 import { MessageComposer } from './components/MessageComposer';
 import { TypingIndicator } from './components/TypingIndicator';
 import { OnlineParticipantsModal } from './components/OnlineParticipantsModal';
-import { SupabaseSetupModal } from './components/SupabaseSetupModal';
-import { ShieldCheck, MessageSquare } from 'lucide-react';
+import { SettingsModal } from './components/SettingsModal';
 
 export default function App() {
   const [visitorId] = useState<string>(() => getOrCreateVisitorId());
-  const [nickname] = useState<string>(() => getStoredNickname());
+  const [nickname, setNickname] = useState<string>(() => getStoredNickname());
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     return localStorage.getItem('plug_chat_sound') !== 'false';
   });
 
+  // Custom Accent Theme Color (user side only)
+  const [accentColor, setAccentColor] = useState<string>(() => {
+    return localStorage.getItem('plug_chat_accent_color') || '#a8c7fa';
+  });
+
+  // Custom Chat Background Image & Opacity (user side only)
+  const [chatBgImage, setChatBgImage] = useState<string>(() => {
+    return localStorage.getItem('plug_chat_bg_image') || '';
+  });
+  const [chatBgOpacity, setChatBgOpacity] = useState<number>(() => {
+    const saved = localStorage.getItem('plug_chat_bg_opacity');
+    return saved ? parseFloat(saved) : 0.5;
+  });
+
   // Modal visibility states
   const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
-  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // Custom hook for global real-time chat, typing, and presence
   const {
@@ -47,18 +61,44 @@ export default function App() {
     });
   };
 
+  // Change Nickname handler (visible to all)
+  const handleSaveNickname = useCallback((newNick: string) => {
+    if (newNick && newNick !== nickname) {
+      setStoredNickname(newNick);
+      setNickname(newNick);
+    }
+  }, [nickname]);
+
+  // Change Accent Color handler (user side only)
+  const handleChangeAccentColor = useCallback((color: string) => {
+    setAccentColor(color);
+    localStorage.setItem('plug_chat_accent_color', color);
+  }, []);
+
+  // Change Chat Background Image handler (user side only)
+  const handleChangeChatBgImage = useCallback((url: string) => {
+    setChatBgImage(url);
+    localStorage.setItem('plug_chat_bg_image', url);
+  }, []);
+
+  // Change Chat Background Opacity handler (user side only)
+  const handleChangeChatBgOpacity = useCallback((opacity: number) => {
+    setChatBgOpacity(opacity);
+    localStorage.setItem('plug_chat_bg_opacity', String(opacity));
+  }, []);
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#131314] text-[#e3e2e6] antialiased font-['Google_Sans_Text','Google_Sans',sans-serif]">
       
       {/* Header */}
       <Header
-        status={status}
         onlineCount={onlineCount}
         nickname={nickname}
         soundEnabled={soundEnabled}
         onToggleSound={handleToggleSound}
         onOpenParticipantsModal={() => setIsParticipantsModalOpen(true)}
-        onOpenSetupModal={() => setIsSetupModalOpen(true)}
+        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+        accentColor={accentColor}
       />
 
       {/* Backend connection error notice */}
@@ -76,6 +116,8 @@ export default function App() {
           hasMoreOlder={hasMoreOlder}
           isLoadingOlder={isLoadingOlder}
           onLoadOlder={loadOlderMessages}
+          chatBgImage={chatBgImage}
+          chatBgOpacity={chatBgOpacity}
         />
 
         {/* Real-time typing indicator */}
@@ -89,28 +131,6 @@ export default function App() {
         />
       </main>
 
-      {/* Footer Banner */}
-      <footer className="bg-[#1e1f20] border-t border-[#282a2d] px-4 py-2 text-center text-[11px] text-[#8e9099]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-3.5 w-3.5 text-[#a8c7fa]" />
-            <span className="font-['Google_Sans']">Plug &amp; Chat</span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:inline-block flex items-center gap-1 text-[#c4c6d0]">
-              <ShieldCheck className="h-3.5 w-3.5 text-[#81c995] inline" /> Account-Free &bull; Anonymous
-            </span>
-            <button
-              onClick={() => setIsSetupModalOpen(true)}
-              className="text-[#a8c7fa] hover:underline font-mono"
-            >
-              Setup &amp; SQL
-            </button>
-          </div>
-        </div>
-      </footer>
-
       {/* Interactive Modals */}
       <OnlineParticipantsModal
         isOpen={isParticipantsModalOpen}
@@ -118,10 +138,17 @@ export default function App() {
         users={onlineUsers}
       />
 
-      <SupabaseSetupModal
-        isOpen={isSetupModalOpen}
-        onClose={() => setIsSetupModalOpen(false)}
-        onCredentialsUpdated={() => window.location.reload()}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        currentNickname={nickname}
+        onSaveNickname={handleSaveNickname}
+        accentColor={accentColor}
+        onChangeAccentColor={handleChangeAccentColor}
+        chatBgImage={chatBgImage}
+        onChangeChatBgImage={handleChangeChatBgImage}
+        chatBgOpacity={chatBgOpacity}
+        onChangeChatBgOpacity={handleChangeChatBgOpacity}
       />
 
     </div>

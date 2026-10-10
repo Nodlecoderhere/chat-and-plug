@@ -10,6 +10,8 @@ interface MessageListProps {
   isLoadingOlder?: boolean;
   onLoadOlder?: () => void;
   onReact?: (messageId: string, emoji: string) => void;
+  chatBgImage?: string;
+  chatBgOpacity?: number;
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -19,6 +21,8 @@ export const MessageList: React.FC<MessageListProps> = ({
   isLoadingOlder,
   onLoadOlder,
   onReact,
+  chatBgImage,
+  chatBgOpacity = 0.5,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState<boolean>(false);
@@ -95,10 +99,25 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   return (
     <div className="relative flex-1 min-h-0 w-full overflow-hidden bg-[#131314]">
+      
+      {/* Custom User Wallpaper & Overlay Dimming */}
+      {chatBgImage && (
+        <>
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-500"
+            style={{ backgroundImage: `url(${chatBgImage})` }}
+          />
+          <div
+            className="absolute inset-0 bg-[#131314] transition-opacity duration-300"
+            style={{ opacity: chatBgOpacity }}
+          />
+        </>
+      )}
+
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="h-full w-full overflow-y-auto px-3 py-4 sm:px-6 space-y-1 scroll-smooth"
+        className="relative z-10 h-full w-full overflow-y-auto px-3 py-4 sm:px-6 space-y-1 scroll-smooth"
       >
         {/* Load older history button */}
         {hasMoreOlder && (
@@ -106,7 +125,7 @@ export const MessageList: React.FC<MessageListProps> = ({
             <button
               onClick={onLoadOlder}
               disabled={isLoadingOlder}
-              className="flex items-center gap-2 rounded-full bg-[#282a2d] px-4 py-1.5 text-xs font-medium text-[#a8c7fa] transition hover:bg-[#333538] disabled:opacity-50"
+              className="flex items-center gap-2 rounded-full bg-[#282a2d]/90 backdrop-blur-md px-4 py-1.5 text-xs font-medium text-[#a8c7fa] transition hover:bg-[#333538] disabled:opacity-50"
             >
               {isLoadingOlder ? (
                 <>
@@ -123,7 +142,7 @@ export const MessageList: React.FC<MessageListProps> = ({
         {/* Empty state */}
         {messages.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center text-center px-4 py-16">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#282a2d] text-[#a8c7fa] shadow-md mb-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#282a2d]/90 text-[#a8c7fa] shadow-md mb-4 backdrop-blur-md">
               <MessageSquare className="h-8 w-8" />
             </div>
             <h3 className="text-lg font-bold text-[#e3e2e6] font-['Google_Sans']">
@@ -154,7 +173,7 @@ export const MessageList: React.FC<MessageListProps> = ({
             <React.Fragment key={msg.id}>
               {showDateHeader && (
                 <div className="my-4 flex items-center justify-center px-4">
-                  <span className="rounded-full bg-[#1e1f20] border border-[#282a2d] px-3.5 py-1 text-[11px] font-bold text-[#a8c7fa] uppercase tracking-wider font-mono">
+                  <span className="rounded-full bg-[#1e1f20]/90 backdrop-blur-md border border-[#282a2d] px-3.5 py-1 text-[11px] font-bold text-[#a8c7fa] uppercase tracking-wider font-mono">
                     {currentDateLabel}
                   </span>
                 </div>

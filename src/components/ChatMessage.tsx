@@ -144,7 +144,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       <div className={`absolute top-0 hidden group-hover:flex items-center gap-1 rounded-full bg-[#282a2d] border border-[#383a3d] px-2 py-1 shadow-lg z-10 ${
         isCurrentUser ? 'right-12' : 'left-12'
       }`}>
-        {['👍', '🔥', '❤️', '😂', '🚀'].map((emoji) => (
+        {['👍', '🔥', '❤️', '😂', '🚀','💀','🤷‍♂️','💦'].map((emoji) => (
           <button
             key={emoji}
             onClick={() => onReact?.(message.id, emoji)}

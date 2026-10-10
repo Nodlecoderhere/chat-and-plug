@@ -90,7 +90,7 @@ export const OnlineParticipantsModal: React.FC<OnlineParticipantsModalProps> = (
               </div>
 
               <div className="flex items-center gap-1.5 text-xs text-[#81c995] font-medium">
-                <Circle className="h-2 w-2 fill-[#81c995] text-[#81c995] animate-pulse" />
+                <Circle className="h-2 w-2 fill-[#81c995] text-[#81c995]" />
                 <span className="text-[11px]">Active</span>
               </div>
             </div>

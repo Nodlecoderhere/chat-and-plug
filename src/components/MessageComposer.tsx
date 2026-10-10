@@ -1,5 +1,5 @@
 import React, { useState, useRef, KeyboardEvent } from 'react';
-import { Send, Smile, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
+import { Send, Smile, AlertCircle, Loader2 } from 'lucide-react';
 
 interface MessageComposerProps {
   onSendMessage: (content: string) => Promise<{ success: boolean; error?: string }>;
@@ -178,15 +178,6 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         </button>
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-[11px] text-[#8e9099] px-2 font-['Google_Sans_Text']">
-        <span className="flex items-center gap-1">
-          <Sparkles className="h-3 w-3 text-[#a8c7fa]" />
-          <span>Press <b>Enter</b> to send, <b>Shift+Enter</b> for new line</span>
-        </span>
-        <span className="hidden xs:inline text-[10px]">
-          Google Pixel Material You UI
-        </span>
-      </div>
     </div>
   );
 };

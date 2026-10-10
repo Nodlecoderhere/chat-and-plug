@@ -1,5 +1,4 @@
 import React from 'react';
-import { ConnectionStatus } from '../types/chat';
 import { 
   MessageSquare, 
   Users, 
@@ -10,23 +9,23 @@ import {
 } from 'lucide-react';
 
 interface HeaderProps {
-  status: ConnectionStatus;
   onlineCount: number;
   nickname: string;
   soundEnabled: boolean;
   onToggleSound: () => void;
   onOpenParticipantsModal: () => void;
-  onOpenSetupModal: () => void;
+  onOpenSettingsModal: () => void;
+  accentColor?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  status,
   onlineCount,
   nickname,
   soundEnabled,
   onToggleSound,
   onOpenParticipantsModal,
-  onOpenSetupModal,
+  onOpenSettingsModal,
+  accentColor = '#a8c7fa',
 }) => {
   return (
     <header className="sticky top-0 z-30 w-full bg-[#1e1f20]/95 backdrop-blur-md border-b border-[#282a2d] px-4 py-3 sm:px-6 shadow-sm">
@@ -34,22 +33,17 @@ export const Header: React.FC<HeaderProps> = ({
         
         {/* Left: Brand logo & Title */}
         <div className="flex items-center gap-3">
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-[#004a77] text-[#c2e7ff] shadow-sm">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-2xl text-[#00315a] shadow-sm font-bold transition-colors"
+            style={{ backgroundColor: accentColor }}
+          >
             <MessageSquare className="h-5 w-5 fill-current" />
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
-              <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${
-                status === 'connected' ? 'bg-[#81c995]' : 'bg-[#fdd663]'
-              }`}></span>
-              <span className={`relative inline-flex h-3 w-3 rounded-full ${
-                status === 'connected' ? 'bg-[#34a853]' : 'bg-[#fbbc04]'
-              }`}></span>
-            </span>
           </div>
 
           <div>
             <h1 className="text-lg font-bold tracking-tight text-[#e3e2e6] sm:text-xl font-['Google_Sans'] flex items-center gap-1.5">
               <span>Plug &amp; Chat</span>
-              <span className="inline-block h-2 w-2 rounded-full bg-[#8ab4f8]" />
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: accentColor }} />
             </h1>
           </div>
         </div>
@@ -61,11 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="group flex items-center gap-2 rounded-full bg-[#282a2d] px-3.5 py-1.5 text-xs font-medium text-[#e3e2e6] transition hover:bg-[#333538] active:scale-95"
             title="View Online Visitors"
           >
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#81c995] opacity-75"></span>
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#34a853]"></span>
-            </span>
-            <Users className="h-3.5 w-3.5 text-[#a8c7fa] transition group-hover:scale-110" />
+            <Users className="h-3.5 w-3.5 transition group-hover:scale-110" style={{ color: accentColor }} />
             <span className="font-semibold text-[#81c995] font-mono">{onlineCount}</span>
             <span className="hidden xs:inline text-[#c4c6d0]">online</span>
           </button>
@@ -74,16 +64,18 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right: Nickname Pill & Action Controls */}
         <div className="flex items-center gap-2">
           
-          {/* Display-only Nickname Badge */}
-          <div
-            className="flex items-center gap-1.5 rounded-full bg-[#004a77] px-3.5 py-1.5 text-xs font-medium text-[#c2e7ff]"
-            title="Your assigned username"
+          {/* Nickname Badge / Settings Trigger */}
+          <button
+            onClick={onOpenSettingsModal}
+            className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition hover:scale-105 active:scale-95"
+            style={{ backgroundColor: '#282a2d', color: '#e3e2e6' }}
+            title="Click to customize nickname & settings"
           >
-            <Sparkles className="h-3.5 w-3.5 text-[#a8c7fa]" />
+            <Sparkles className="h-3.5 w-3.5" style={{ color: accentColor }} />
             <span className="max-w-[110px] truncate sm:max-w-[150px] font-mono font-bold">
               {nickname}
             </span>
-          </div>
+          </button>
 
           {/* Sound toggle button */}
           <button
@@ -92,7 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
             title={soundEnabled ? 'Mute notification sound' : 'Enable notification sound'}
           >
             {soundEnabled ? (
-              <Volume2 className="h-4 w-4 text-[#a8c7fa]" />
+              <Volume2 className="h-4 w-4" style={{ color: accentColor }} />
             ) : (
               <VolumeX className="h-4 w-4 text-[#8e9099]" />
             )}
@@ -100,11 +92,11 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Settings button */}
           <button
-            onClick={onOpenSetupModal}
+            onClick={onOpenSettingsModal}
             className="rounded-full bg-[#282a2d] p-2 text-[#c4c6d0] transition hover:bg-[#333538] hover:text-[#e3e2e6] active:scale-95"
-            title="Supabase Settings & Migration SQL"
+            title="Preferences & Settings"
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-4 w-4" style={{ color: accentColor }} />
           </button>
 
         </div>
