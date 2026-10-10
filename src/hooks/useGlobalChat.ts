@@ -100,7 +100,22 @@ export function useGlobalChat(
           }
 
           if (data) {
-            const loaded = data.reverse() as Message[];
+            const loaded = data
+              .map((item) => {
+                let replyToObj = item.reply_to;
+                if (typeof replyToObj === 'string') {
+                  try {
+                    replyToObj = JSON.parse(replyToObj);
+                  } catch {
+                    replyToObj = undefined;
+                  }
+                }
+                return {
+                  ...item,
+                  reply_to: replyToObj
+                } as Message;
+              })
+              .reverse();
             setMessages(loaded);
             setHasMoreOlder(data.length >= 50);
           }
@@ -146,7 +161,20 @@ export function useGlobalChat(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'messages' },
           (payload) => {
-            const newMsg = payload.new as Message;
+            const rawMsg = payload.new as Record<string, unknown>;
+            let replyToObj = rawMsg.reply_to as MessageReply | undefined;
+            if (typeof replyToObj === 'string') {
+              try {
+                replyToObj = JSON.parse(replyToObj);
+              } catch {
+                replyToObj = undefined;
+              }
+            }
+            const newMsg: Message = {
+              ...(rawMsg as unknown as Message),
+              reply_to: replyToObj
+            };
+
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMsg.id)) return prev;
               if (soundEnabled && newMsg.visitor_id !== visitorId) {
@@ -158,7 +186,21 @@ export function useGlobalChat(
             updateTypingStatus(newMsg.visitor_id, newMsg.nickname, false);
           }
         )
-        // 2. Broadcast events for typing indicators
+        // 2. Broadcast events for real-time instant message delivery (including replies)
+        .on('broadcast', { event: 'new_message' }, (payload) => {
+          if (payload.payload) {
+            const newMsg = payload.payload as Message;
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              if (soundEnabled && newMsg.visitor_id !== visitorId) {
+                playMessageSound();
+              }
+              return [...prev, newMsg];
+            });
+            updateTypingStatus(newMsg.visitor_id, newMsg.nickname, false);
+          }
+        })
+        // 3. Broadcast events for typing indicators
         .on('broadcast', { event: 'typing' }, (payload) => {
           if (payload.payload) {
             const { visitor_id, nickname: nick, is_typing } = payload.payload;
@@ -385,6 +427,14 @@ export function useGlobalChat(
           if (insertErr) {
             console.error('Supabase insert error:', insertErr);
             return { success: false, error: insertErr.message };
+          }
+
+          if (supabaseChannelRef.current) {
+            supabaseChannelRef.current.send({
+              type: 'broadcast',
+              event: 'new_message',
+              payload: newMsg
+            });
           }
 
           setMessages((prev) => {

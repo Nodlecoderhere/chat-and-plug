@@ -5,6 +5,7 @@ import { Copy, Check, AlertCircle, Sparkles, Reply } from 'lucide-react';
 interface ChatMessageProps {
   message: Message;
   isCurrentUser: boolean;
+  currentNickname?: string;
   showAvatar?: boolean;
   onReact?: (messageId: string, emoji: string) => void;
   onReply?: (message: Message) => void;
@@ -14,6 +15,7 @@ interface ChatMessageProps {
 export const ChatMessage: React.FC<ChatMessageProps> = ({
   message,
   isCurrentUser,
+  currentNickname,
   showAvatar = true,
   onReact,
   onReply,
@@ -21,6 +23,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [reportState, setReportState] = useState(false);
+
+  const isReplyToMe = Boolean(
+    message.reply_to &&
+    currentNickname &&
+    message.reply_to.nickname.trim().toLowerCase() === currentNickname.trim().toLowerCase()
+  );
 
   // System notification badge
   if (message.is_system) {
@@ -123,17 +131,28 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         {message.reply_to && (
           <div
             onClick={() => onScrollToMessage?.(message.reply_to!.id)}
-            className={`mb-1 cursor-pointer max-w-full rounded-2xl border-l-4 px-3 py-1.5 text-xs shadow-sm transition hover:opacity-90 active:scale-98 ${
-              isCurrentUser
-                ? 'bg-[#00315a]/80 border-[#a8c7fa] text-[#d3e3fd]'
+            className={`mb-1.5 cursor-pointer max-w-full rounded-2xl border-l-4 px-3.5 py-2 text-xs shadow-md transition hover:opacity-95 active:scale-98 ${
+              isReplyToMe
+                ? 'bg-[#1a382b] border-[#81c995] text-[#c2ebd0] ring-1 ring-[#81c995]/40'
+                : isCurrentUser
+                ? 'bg-[#00315a]/90 border-[#a8c7fa] text-[#d3e3fd]'
                 : 'bg-[#1e1f20] border-[#a8c7fa] text-[#c4c6d0]'
             }`}
           >
-            <div className="flex items-center gap-1 text-[11px] font-bold text-[#a8c7fa] font-mono">
-              <Reply className="h-3 w-3 shrink-0" />
-              <span className="truncate">Replying to {message.reply_to.nickname}</span>
+            <div className="flex items-center justify-between gap-2 text-[11px] font-bold font-mono">
+              <div className="flex items-center gap-1.5 text-[#a8c7fa] truncate">
+                <Reply className="h-3.5 w-3.5 shrink-0 text-[#a8c7fa]" />
+                <span className="truncate">
+                  {isReplyToMe ? `Replying to YOU (${message.reply_to.nickname})` : `Replying to ${message.reply_to.nickname}`}
+                </span>
+              </div>
+              {isReplyToMe && (
+                <span className="shrink-0 rounded-full bg-[#81c995] text-[#0f5223] px-2 py-0.2 text-[9px] font-extrabold uppercase tracking-wide">
+                  YOUR MESSAGE
+                </span>
+              )}
             </div>
-            <p className="line-clamp-2 text-[11px] opacity-80 break-words mt-0.5">
+            <p className="line-clamp-2 text-[11px] opacity-85 break-words mt-1">
               {message.reply_to.content}
             </p>
           </div>

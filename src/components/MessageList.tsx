@@ -6,6 +6,7 @@ import { ArrowDown, MessageSquare, Loader2 } from 'lucide-react';
 interface MessageListProps {
   messages: Message[];
   currentVisitorId: string;
+  currentNickname?: string;
   hasMoreOlder?: boolean;
   isLoadingOlder?: boolean;
   onLoadOlder?: () => void;
@@ -19,6 +20,7 @@ interface MessageListProps {
 export const MessageList: React.FC<MessageListProps> = ({
   messages,
   currentVisitorId,
+  currentNickname,
   hasMoreOlder,
   isLoadingOlder,
   onLoadOlder,
@@ -186,6 +188,7 @@ export const MessageList: React.FC<MessageListProps> = ({
               <ChatMessage
                 message={msg}
                 isCurrentUser={msg.visitor_id === currentVisitorId}
+                currentNickname={currentNickname}
                 showAvatar={!isSameSender}
                 onReact={onReact}
                 onReply={onReply}

@@ -152,6 +152,7 @@ export default function App() {
         <MessageList
           messages={messages}
           currentVisitorId={visitorId}
+          currentNickname={nickname}
           hasMoreOlder={hasMoreOlder}
           isLoadingOlder={isLoadingOlder}
           onLoadOlder={loadOlderMessages}
