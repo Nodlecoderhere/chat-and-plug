@@ -4,7 +4,7 @@ import { getSupabaseClient, getSupabaseCredentials } from '../lib/supabase';
 import { playMessageSound } from '../lib/sound';
 import { getRandomAvatarColor } from '../lib/nickname';
 
-const CHANNEL_NAME = 'global-chat-events';
+const CHANNEL_NAME = 'global-chat';
 const LOCAL_STORAGE_MESSAGES_KEY = 'plug_chat_local_messages';
 
 export interface TypingUser {
@@ -42,22 +42,6 @@ export function useGlobalChat(
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const supabaseChannelRef = useRef<ReturnType<NonNullable<ReturnType<typeof getSupabaseClient>>['channel']> | null>(null);
   const lastSentTimeRef = useRef<number>(0);
-
-  // Helper to load local fallback messages
-  const loadLocalFallbackMessages = useCallback(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_MESSAGES_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setMessages(parsed);
-      } catch {
-        setMessages(INITIAL_DEMO_MESSAGES);
-      }
-    } else {
-      setMessages(INITIAL_DEMO_MESSAGES);
-      localStorage.setItem(LOCAL_STORAGE_MESSAGES_KEY, JSON.stringify(INITIAL_DEMO_MESSAGES));
-    }
-  }, []);
 
   // Helper to update typing map
   const updateTypingStatus = useCallback((vId: string, nick: string, isTyping: boolean) => {
@@ -113,20 +97,10 @@ export function useGlobalChat(
             .limit(50);
 
           if (fetchErr) {
-            console.warn('Supabase fetch notice:', fetchErr);
-
-            // Handle table missing in schema cache (PGRST205) gracefully
-            if (fetchErr.code === 'PGRST205' || fetchErr.message.includes('messages')) {
-              setError("Supabase table 'public.messages' is missing. Please run the SQL migration script in Settings.");
-              loadLocalFallbackMessages();
-              setStatus('connected');
-              return;
-            } else {
-              setError(`Database error: ${fetchErr.message}`);
-              setStatus('error');
-              loadLocalFallbackMessages();
-              return;
-            }
+            console.error('Error fetching Supabase messages:', fetchErr);
+            setError(`Database error: ${fetchErr.message}`);
+            setStatus('error');
+            return;
           }
 
           if (data) {
@@ -138,9 +112,8 @@ export function useGlobalChat(
           setError(null);
         } catch (err: unknown) {
           console.error('Fetch error:', err);
-          setStatus('connected');
-          loadLocalFallbackMessages();
-          setError(err instanceof Error ? err.message : 'Failed to load cloud messages');
+          setStatus('error');
+          setError(err instanceof Error ? err.message : 'Failed to load messages');
         }
       };
 
@@ -162,7 +135,7 @@ export function useGlobalChat(
               return [...prev, newMsg];
             });
 
-            // Clear typing status on message receive
+            // When new message arrives from sender, clear their typing status
             updateTypingStatus(newMsg.visitor_id, newMsg.nickname, false);
           }
         )
@@ -172,10 +145,11 @@ export function useGlobalChat(
             updateTypingStatus(visitor_id, nickname, Boolean(is_typing));
           }
         })
-        .subscribe((subStatus) => {
-          if (subStatus === 'SUBSCRIBED') {
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
             setStatus('connected');
-          } else if (subStatus === 'CLOSED' || subStatus === 'CHANNEL_ERROR') {
+            setError(null);
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             setStatus('reconnecting');
           }
         });
@@ -189,7 +163,19 @@ export function useGlobalChat(
       // Local Mesh Fallback Mode
       setIsSupabaseMode(false);
       setStatus('connected');
-      loadLocalFallbackMessages();
+
+      const saved = localStorage.getItem(LOCAL_STORAGE_MESSAGES_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setMessages(parsed);
+        } catch {
+          setMessages(INITIAL_DEMO_MESSAGES);
+        }
+      } else {
+        setMessages(INITIAL_DEMO_MESSAGES);
+        localStorage.setItem(LOCAL_STORAGE_MESSAGES_KEY, JSON.stringify(INITIAL_DEMO_MESSAGES));
+      }
 
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         const bc = new BroadcastChannel('plug_chat_mesh');
@@ -217,7 +203,7 @@ export function useGlobalChat(
         };
       }
     }
-  }, [visitorId, soundEnabled, updateTypingStatus, loadLocalFallbackMessages]);
+  }, [visitorId, soundEnabled, updateTypingStatus]);
 
   // Method to send typing signal
   const sendTypingSignal = useCallback((isTyping: boolean) => {
@@ -294,7 +280,7 @@ export function useGlobalChat(
         avatar_color: getRandomAvatarColor(visitorId)
       };
 
-      if (creds.isConfigured && client && !error?.includes('missing')) {
+      if (creds.isConfigured && client) {
         try {
           const { error: insertErr } = await client.from('messages').insert([
             {
@@ -308,9 +294,7 @@ export function useGlobalChat(
 
           if (insertErr) {
             console.error('Supabase insert error:', insertErr);
-            // Fall back to local broadcast if table is missing
-            setMessages((prev) => [...prev, newMsg]);
-            return { success: true };
+            return { success: false, error: insertErr.message };
           }
 
           setMessages((prev) => {
@@ -321,11 +305,9 @@ export function useGlobalChat(
           return { success: true };
         } catch (err: unknown) {
           console.error('Failed to send message:', err);
-          setMessages((prev) => [...prev, newMsg]);
-          return { success: true };
+          return { success: false, error: err instanceof Error ? err.message : 'Network error' };
         }
       } else {
-        // Fallback / local mesh mode
         setMessages((prev) => {
           const updated = [...prev, newMsg];
           localStorage.setItem(LOCAL_STORAGE_MESSAGES_KEY, JSON.stringify(updated.slice(-100)));
@@ -339,7 +321,7 @@ export function useGlobalChat(
         return { success: true };
       }
     },
-    [currentNickname, visitorId, sendTypingSignal, error]
+    [currentNickname, visitorId, sendTypingSignal]
   );
 
   // Load older messages for pagination
@@ -353,14 +335,14 @@ export function useGlobalChat(
     try {
       const oldestTimestamp = messages[0].created_at;
 
-      const { data, error: fetchErr } = await client
+      const { data, error } = await client
         .from('messages')
         .select('*')
         .lt('created_at', oldestTimestamp)
         .order('created_at', { ascending: false })
         .limit(30);
 
-      if (!fetchErr && data && data.length > 0) {
+      if (!error && data && data.length > 0) {
         const older = data.reverse() as Message[];
         setMessages((prev) => [...older, ...prev]);
         setHasMoreOlder(data.length >= 30);

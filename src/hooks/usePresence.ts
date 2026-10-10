@@ -3,8 +3,7 @@ import { UserPresence } from '../types/chat';
 import { getSupabaseClient, getSupabaseCredentials } from '../lib/supabase';
 import { getRandomAvatarColor } from '../lib/nickname';
 
-// Dedicated presence channel topic to avoid collision with message broadcasting
-const PRESENCE_CHANNEL_NAME = 'global-chat-presence';
+const CHANNEL_NAME = 'global-chat';
 
 export function usePresence(
   visitorId: string,
@@ -19,8 +18,8 @@ export function usePresence(
     const client = getSupabaseClient();
 
     if (creds.isConfigured && client) {
-      // Supabase Presence on dedicated channel
-      const channel = client.channel(PRESENCE_CHANNEL_NAME, {
+      // Supabase Presence
+      const channel = client.channel(CHANNEL_NAME, {
         config: {
           presence: {
             key: visitorId
@@ -37,7 +36,6 @@ export function usePresence(
         avatar_color: getRandomAvatarColor(visitorId)
       };
 
-      // Chain ALL .on() handlers BEFORE calling .subscribe()
       channel
         .on('presence', { event: 'sync' }, () => {
           const state = channel.presenceState<UserPresence>();
@@ -83,6 +81,7 @@ export function usePresence(
         is_current_user: true
       };
 
+      // Standard base count + local active tab sync
       setOnlineUsers([localSelf]);
       setOnlineCount(1);
 
@@ -91,6 +90,7 @@ export function usePresence(
         const activeMap = new Map<string, UserPresence>();
         activeMap.set(visitorId, localSelf);
 
+        // Ping periodically
         const sendPing = () => {
           bc.postMessage({
             type: 'PING',
