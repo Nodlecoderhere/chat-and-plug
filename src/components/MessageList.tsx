@@ -8,6 +8,7 @@ interface MessageListProps {
   currentVisitorId: string;
   currentNickname?: string;
   currentUserAvatarUrl?: string;
+  userAvatarsMap?: Map<string, string>;
   hasMoreOlder?: boolean;
   isLoadingOlder?: boolean;
   onLoadOlder?: () => void;
@@ -23,6 +24,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   currentVisitorId,
   currentNickname,
   currentUserAvatarUrl,
+  userAvatarsMap,
   hasMoreOlder,
   isLoadingOlder,
   onLoadOlder,
@@ -192,6 +194,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                 isCurrentUser={msg.visitor_id === currentVisitorId}
                 currentNickname={currentNickname}
                 currentUserAvatarUrl={currentUserAvatarUrl}
+                userAvatarsMap={userAvatarsMap}
                 showAvatar={!isSameSender}
                 onReact={onReact}
                 onReply={onReply}

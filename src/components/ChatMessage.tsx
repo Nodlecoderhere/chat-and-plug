@@ -7,6 +7,7 @@ interface ChatMessageProps {
   isCurrentUser: boolean;
   currentNickname?: string;
   currentUserAvatarUrl?: string;
+  userAvatarsMap?: Map<string, string>;
   showAvatar?: boolean;
   onReact?: (messageId: string, emoji: string) => void;
   onReply?: (message: Message) => void;
@@ -18,6 +19,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   isCurrentUser,
   currentNickname,
   currentUserAvatarUrl,
+  userAvatarsMap,
   showAvatar = true,
   onReact,
   onReply,
@@ -33,7 +35,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     message.reply_to.nickname.trim().toLowerCase() === currentNickname.trim().toLowerCase()
   );
 
-  const effectiveAvatarUrl = message.avatar_url || (isCurrentUser ? currentUserAvatarUrl : undefined);
+  const effectiveAvatarUrl =
+    message.avatar_url ||
+    (isCurrentUser ? currentUserAvatarUrl : userAvatarsMap?.get(message.visitor_id));
 
   // System notification badge
   if (message.is_system) {
@@ -181,14 +185,65 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           )}
         </div>
 
-        {/* Quick inline mobile/touch Reply button */}
-        <div className="mt-1 flex items-center gap-2">
+        {/* Hover or Tap compact reaction & action bar below message */}
+        <div
+          className={`${
+            showMobileToolbar ? 'flex' : 'hidden group-hover:flex'
+          } items-center gap-0.5 mt-1 rounded-full bg-[#1e1f20]/95 backdrop-blur-md border border-[#383a3d] px-1.5 py-0.5 shadow-md z-10 transition-all duration-200 animate-fadeIn ${
+            isCurrentUser ? 'self-end' : 'self-start'
+          }`}
+        >
           <button
-            onClick={() => onReply?.(message)}
-            className="flex items-center gap-1 text-[10px] font-bold text-[#8e9099] hover:text-[#a8c7fa] transition px-1 py-0.5 rounded-full hover:bg-[#282a2d]"
+            onClick={() => {
+              onReply?.(message);
+              setShowMobileToolbar(false);
+            }}
+            className="rounded-full px-1.5 py-0.5 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#a8c7fa] transition flex items-center gap-1 text-[10px] font-bold"
+            title="Reply to message"
           >
             <Reply className="h-3 w-3 text-[#a8c7fa]" />
             <span>Reply</span>
+          </button>
+
+          <div className="h-2.5 w-[1px] bg-[#383a3d] my-auto mx-0.5" />
+
+          {['👍', '🔥', '❤️', '😂', '🚀', '💀'].map((emoji) => (
+            <button
+              key={emoji}
+              onClick={() => {
+                onReact?.(message.id, emoji);
+                setShowMobileToolbar(false);
+              }}
+              className="rounded-full p-0.5 text-[11px] hover:bg-[#383a3d] transition transform hover:scale-125"
+              title={`React with ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+
+          <div className="h-2.5 w-[1px] bg-[#383a3d] my-auto mx-0.5" />
+
+          <button
+            onClick={() => {
+              handleCopy();
+              setShowMobileToolbar(false);
+            }}
+            className="rounded-full p-0.5 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#e3e2e6] transition"
+            title="Copy message"
+          >
+            {copied ? <Check className="h-3 w-3 text-[#81c995]" /> : <Copy className="h-3 w-3" />}
+          </button>
+
+          <button
+            onClick={() => {
+              setReportState(true);
+              setTimeout(() => setReportState(false), 2500);
+              setShowMobileToolbar(false);
+            }}
+            className="rounded-full p-0.5 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#fdd663] transition"
+            title="Flag message"
+          >
+            <AlertCircle className={`h-3 w-3 ${reportState ? 'text-[#fdd663]' : ''}`} />
           </button>
         </div>
 
@@ -207,66 +262,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             ))}
           </div>
         )}
-      </div>
-
-      {/* Hover or Tap action toolbar */}
-      <div className={`absolute top-0 ${
-        showMobileToolbar ? 'flex' : 'hidden group-hover:flex'
-      } items-center gap-1 rounded-full bg-[#282a2d] border border-[#383a3d] px-2 py-1 shadow-lg z-10 ${
-        isCurrentUser ? 'right-12' : 'left-12'
-      }`}>
-        <button
-          onClick={() => {
-            onReply?.(message);
-            setShowMobileToolbar(false);
-          }}
-          className="rounded-full p-1 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#a8c7fa] transition flex items-center gap-1 text-xs px-1.5 font-bold"
-          title="Reply to message"
-        >
-          <Reply className="h-3.5 w-3.5 text-[#a8c7fa]" />
-          <span className="text-[10px]">Reply</span>
-        </button>
-
-        <div className="h-3 w-[1px] bg-[#383a3d] my-auto mx-0.5" />
-
-        {['👍', '🔥', '❤️', '😂', '🚀', '💀'].map((emoji) => (
-          <button
-            key={emoji}
-            onClick={() => {
-              onReact?.(message.id, emoji);
-              setShowMobileToolbar(false);
-            }}
-            className="rounded-full p-1 text-xs hover:bg-[#383a3d] transition transform hover:scale-125"
-            title={`React with ${emoji}`}
-          >
-            {emoji}
-          </button>
-        ))}
-
-        <div className="h-3 w-[1px] bg-[#383a3d] my-auto mx-0.5" />
-
-        <button
-          onClick={() => {
-            handleCopy();
-            setShowMobileToolbar(false);
-          }}
-          className="rounded-full p-1 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#e3e2e6] transition"
-          title="Copy message"
-        >
-          {copied ? <Check className="h-3.5 w-3.5 text-[#81c995]" /> : <Copy className="h-3.5 w-3.5" />}
-        </button>
-
-        <button
-          onClick={() => {
-            setReportState(true);
-            setTimeout(() => setReportState(false), 2500);
-            setShowMobileToolbar(false);
-          }}
-          className="rounded-full p-1 text-[#c4c6d0] hover:bg-[#383a3d] hover:text-[#fdd663] transition"
-          title="Flag message"
-        >
-          <AlertCircle className={`h-3.5 w-3.5 ${reportState ? 'text-[#fdd663]' : ''}`} />
-        </button>
       </div>
     </div>
   );

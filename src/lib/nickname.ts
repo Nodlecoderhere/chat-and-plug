@@ -116,8 +116,8 @@ export function processProfilePicture(file: File): Promise<string> {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 256;
+        canvas.width = 512;
+        canvas.height = 512;
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
@@ -133,10 +133,10 @@ export function processProfilePicture(file: File): Promise<string> {
         const sx = (img.width - minDim) / 2;
         const sy = (img.height - minDim) / 2;
 
-        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 256, 256);
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 512, 512);
 
-        // Convert to optimized JPEG data URL (~10-15KB string)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+        // Convert to optimized JPEG data URL
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
         resolve(dataUrl);
       };
       img.onerror = () => reject(new Error('Failed to process image file'));

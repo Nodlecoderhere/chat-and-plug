@@ -28,6 +28,17 @@ export function useGlobalChat(
   const [hasMoreOlder, setHasMoreOlder] = useState<boolean>(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState<boolean>(false);
 
+  // Refs to maintain current prop values without tearing down subscriptions
+  const currentNicknameRef = useRef(currentNickname);
+  const avatarUrlRef = useRef(avatarUrl);
+  const soundEnabledRef = useRef(soundEnabled);
+
+  useEffect(() => {
+    currentNicknameRef.current = currentNickname;
+    avatarUrlRef.current = avatarUrl;
+    soundEnabledRef.current = soundEnabled;
+  }, [currentNickname, avatarUrl, soundEnabled]);
+
   // Online Presence state
   const [onlineUsers, setOnlineUsers] = useState<UserPresence[]>([]);
   const [onlineCount, setOnlineCount] = useState<number>(1);
@@ -74,6 +85,21 @@ export function useGlobalChat(
     return () => clearInterval(interval);
   }, []);
 
+  // Update presence tracking dynamically whenever nickname or avatarUrl changes
+  useEffect(() => {
+    if (supabaseChannelRef.current) {
+      supabaseChannelRef.current
+        .track({
+          visitor_id: visitorId,
+          nickname: currentNickname,
+          joined_at: new Date().toISOString(),
+          avatar_color: getRandomAvatarColor(visitorId),
+          avatar_url: avatarUrl
+        })
+        .catch((err) => console.warn('Presence track update warning:', err));
+    }
+  }, [visitorId, currentNickname, avatarUrl]);
+
   // Single unified Realtime Channel Initialization
   useEffect(() => {
     const creds = getSupabaseCredentials();
@@ -82,6 +108,22 @@ export function useGlobalChat(
     if (creds.isConfigured && client) {
       setIsSupabaseMode(true);
       setStatus('connecting');
+
+      // Helper to parse reply_to
+      const parseReplyTo = (replyToRaw: unknown): MessageReply | undefined => {
+        if (!replyToRaw) return undefined;
+        if (typeof replyToRaw === 'string') {
+          try {
+            return JSON.parse(replyToRaw);
+          } catch {
+            return undefined;
+          }
+        }
+        if (typeof replyToRaw === 'object') {
+          return replyToRaw as MessageReply;
+        }
+        return undefined;
+      };
 
       // Fetch initial recent 50 messages from Supabase Postgres
       const fetchInitialMessages = async () => {
@@ -101,22 +143,33 @@ export function useGlobalChat(
 
           if (data) {
             const loaded = data
-              .map((item) => {
-                let replyToObj = item.reply_to;
-                if (typeof replyToObj === 'string') {
-                  try {
-                    replyToObj = JSON.parse(replyToObj);
-                  } catch {
-                    replyToObj = undefined;
-                  }
+              .map((item) => ({
+                ...item,
+                avatar_url: item.avatar_url || undefined,
+                reply_to: parseReplyTo(item.reply_to)
+              }))
+              .reverse() as Message[];
+
+            setMessages((prev) => {
+              if (prev.length === 0) return loaded;
+              const prevMap = new Map(prev.map((m) => [m.id, m]));
+              const mergedLoaded = loaded.map((item) => {
+                const existing = prevMap.get(item.id);
+                if (existing) {
+                  return {
+                    ...item,
+                    avatar_url: item.avatar_url || existing.avatar_url,
+                    reply_to: item.reply_to || existing.reply_to
+                  };
                 }
-                return {
-                  ...item,
-                  reply_to: replyToObj
-                } as Message;
-              })
-              .reverse();
-            setMessages(loaded);
+                return item;
+              });
+
+              // Retain any live incoming messages that weren't in history batch
+              const loadedIds = new Set(mergedLoaded.map((m) => m.id));
+              const extraLive = prev.filter((m) => !loadedIds.has(m.id));
+              return [...mergedLoaded, ...extraLive];
+            });
             setHasMoreOlder(data.length >= 50);
           }
           setStatus('connected');
@@ -130,14 +183,13 @@ export function useGlobalChat(
 
       fetchInitialMessages();
 
-      // Ensure clean channel setup: remove any pre-existing channel before creating new subscription
+      // Ensure clean channel setup
       const existingChannels = client.getChannels();
       const existing = existingChannels.find((ch) => ch.topic === `realtime:${CHANNEL_NAME}`);
       if (existing) {
         client.removeChannel(existing);
       }
 
-      // Create SINGLE unified channel for messages, broadcast typing, and presence
       const channel = client.channel(CHANNEL_NAME, {
         config: {
           presence: {
@@ -146,15 +198,14 @@ export function useGlobalChat(
         }
       });
 
-      const myPresenceState: UserPresence = {
+      const initialPresence: UserPresence = {
         visitor_id: visitorId,
-        nickname: currentNickname,
+        nickname: currentNicknameRef.current,
         joined_at: new Date().toISOString(),
         avatar_color: getRandomAvatarColor(visitorId),
-        avatar_url: avatarUrl
+        avatar_url: avatarUrlRef.current
       };
 
-      // Register ALL event handlers BEFORE calling .subscribe()
       channel
         // 1. Postgres INSERT changes for new messages
         .on(
@@ -162,22 +213,29 @@ export function useGlobalChat(
           { event: 'INSERT', schema: 'public', table: 'messages' },
           (payload) => {
             const rawMsg = payload.new as Record<string, unknown>;
-            let replyToObj = rawMsg.reply_to as MessageReply | undefined;
-            if (typeof replyToObj === 'string') {
-              try {
-                replyToObj = JSON.parse(replyToObj);
-              } catch {
-                replyToObj = undefined;
-              }
-            }
+            const parsedReply = parseReplyTo(rawMsg.reply_to);
             const newMsg: Message = {
               ...(rawMsg as unknown as Message),
-              reply_to: replyToObj
+              avatar_url: (rawMsg.avatar_url as string) || undefined,
+              reply_to: parsedReply
             };
 
             setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              if (soundEnabled && newMsg.visitor_id !== visitorId) {
+              const existingIdx = prev.findIndex((m) => m.id === newMsg.id);
+              if (existingIdx !== -1) {
+                const existing = prev[existingIdx];
+                const merged: Message = {
+                  ...existing,
+                  ...newMsg,
+                  avatar_url: newMsg.avatar_url || existing.avatar_url,
+                  reply_to: newMsg.reply_to || existing.reply_to
+                };
+                const updated = [...prev];
+                updated[existingIdx] = merged;
+                return updated;
+              }
+
+              if (soundEnabledRef.current && newMsg.visitor_id !== visitorId) {
                 playMessageSound();
               }
               return [...prev, newMsg];
@@ -186,13 +244,26 @@ export function useGlobalChat(
             updateTypingStatus(newMsg.visitor_id, newMsg.nickname, false);
           }
         )
-        // 2. Broadcast events for real-time instant message delivery (including replies)
+        // 2. Broadcast events for instant real-time message delivery
         .on('broadcast', { event: 'new_message' }, (payload) => {
           if (payload.payload) {
             const newMsg = payload.payload as Message;
             setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              if (soundEnabled && newMsg.visitor_id !== visitorId) {
+              const existingIdx = prev.findIndex((m) => m.id === newMsg.id);
+              if (existingIdx !== -1) {
+                const existing = prev[existingIdx];
+                const merged: Message = {
+                  ...existing,
+                  ...newMsg,
+                  avatar_url: newMsg.avatar_url || existing.avatar_url,
+                  reply_to: newMsg.reply_to || existing.reply_to
+                };
+                const updated = [...prev];
+                updated[existingIdx] = merged;
+                return updated;
+              }
+
+              if (soundEnabledRef.current && newMsg.visitor_id !== visitorId) {
                 playMessageSound();
               }
               return [...prev, newMsg];
@@ -207,7 +278,7 @@ export function useGlobalChat(
             updateTypingStatus(visitor_id, nick, Boolean(is_typing));
           }
         })
-        // 3. Presence sync for online users tracking
+        // 4. Presence sync for online users tracking
         .on('presence', { event: 'sync' }, () => {
           const state = channel.presenceState<UserPresence>();
           const userList: UserPresence[] = [];
@@ -226,13 +297,12 @@ export function useGlobalChat(
           setOnlineUsers(userList);
           setOnlineCount(userList.length || 1);
         })
-        // Finally, call subscribe ONCE
         .subscribe(async (subStatus) => {
           if (subStatus === 'SUBSCRIBED') {
             setStatus('connected');
             setError(null);
             try {
-              await channel.track(myPresenceState);
+              await channel.track(initialPresence);
             } catch (trackErr) {
               console.warn('Presence track warning:', trackErr);
             }
@@ -265,13 +335,12 @@ export function useGlobalChat(
         localStorage.setItem(LOCAL_STORAGE_MESSAGES_KEY, JSON.stringify(INITIAL_DEMO_MESSAGES));
       }
 
-      // Self presence for fallback mode
       const localSelf: UserPresence = {
         visitor_id: visitorId,
-        nickname: currentNickname,
+        nickname: currentNicknameRef.current,
         joined_at: new Date().toISOString(),
         avatar_color: getRandomAvatarColor(visitorId),
-        avatar_url: avatarUrl,
+        avatar_url: avatarUrlRef.current,
         is_current_user: true
       };
       setOnlineUsers([localSelf]);
@@ -287,7 +356,7 @@ export function useGlobalChat(
         const sendPresencePing = () => {
           bc.postMessage({
             type: 'PRESENCE_PING',
-            user: { ...localSelf, nickname: currentNickname, avatar_url: avatarUrl }
+            user: { ...localSelf, nickname: currentNicknameRef.current, avatar_url: avatarUrlRef.current }
           });
         };
 
@@ -300,7 +369,7 @@ export function useGlobalChat(
               const newMsg = event.data.message as Message;
               setMessages((prev) => {
                 if (prev.some((m) => m.id === newMsg.id)) return prev;
-                if (soundEnabled && newMsg.visitor_id !== visitorId) {
+                if (soundEnabledRef.current && newMsg.visitor_id !== visitorId) {
                   playMessageSound();
                 }
                 const updated = [...prev, newMsg];
@@ -332,7 +401,7 @@ export function useGlobalChat(
         };
       }
     }
-  }, [visitorId, currentNickname, avatarUrl, soundEnabled, updateTypingStatus]);
+  }, [visitorId, updateTypingStatus]);
 
   // Method to send typing signal
   const sendTypingSignal = useCallback((isTyping: boolean) => {
@@ -342,7 +411,7 @@ export function useGlobalChat(
         event: 'typing',
         payload: {
           visitor_id: visitorId,
-          nickname: currentNickname,
+          nickname: currentNicknameRef.current,
           is_typing: isTyping
         }
       });
@@ -352,11 +421,11 @@ export function useGlobalChat(
       broadcastChannelRef.current.postMessage({
         type: 'TYPING',
         visitor_id: visitorId,
-        nickname: currentNickname,
+        nickname: currentNicknameRef.current,
         is_typing: isTyping
       });
     }
-  }, [visitorId, currentNickname]);
+  }, [visitorId]);
 
   // Send message method
   const sendMessage = useCallback(
@@ -376,31 +445,54 @@ export function useGlobalChat(
       }
       lastSentTimeRef.current = now;
 
-      // Stop typing signal on submit
       sendTypingSignal(false);
 
       const client = getSupabaseClient();
       const creds = getSupabaseCredentials();
 
+      const activeNickname = currentNicknameRef.current;
+      const activeAvatarUrl = avatarUrlRef.current;
+
       const cleanReplyTo: MessageReply | undefined = replyTo
         ? {
             id: replyTo.id,
             nickname: replyTo.nickname,
-            content: replyTo.content
+            content: replyTo.content,
+            avatar_url: replyTo.avatar_url
           }
         : undefined;
 
       const newMsg: Message = {
         id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
-        nickname: currentNickname,
+        nickname: activeNickname,
         visitor_id: visitorId,
         content: trimmed,
         created_at: new Date().toISOString(),
         avatar_color: getRandomAvatarColor(visitorId),
-        avatar_url: avatarUrl || undefined,
+        avatar_url: activeAvatarUrl || undefined,
         reply_to: cleanReplyTo
       };
 
+      // 1. Immediately update local state
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
+
+      // 2. Immediately broadcast over Realtime channel for instant sub-50ms delivery
+      if (supabaseChannelRef.current) {
+        supabaseChannelRef.current.send({
+          type: 'broadcast',
+          event: 'new_message',
+          payload: newMsg
+        });
+      }
+
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
+      }
+
+      // 3. Persist to Supabase Postgres database if configured
       if (creds.isConfigured && client) {
         try {
           const insertData: Record<string, unknown> = {
@@ -410,8 +502,9 @@ export function useGlobalChat(
             content: newMsg.content,
             avatar_color: newMsg.avatar_color
           };
-          if (avatarUrl) {
-            insertData.avatar_url = avatarUrl;
+
+          if (activeAvatarUrl) {
+            insertData.avatar_url = activeAvatarUrl;
           }
           if (cleanReplyTo) {
             insertData.reply_to = cleanReplyTo;
@@ -419,8 +512,17 @@ export function useGlobalChat(
 
           let { error: insertErr } = await client.from('messages').insert([insertData]);
 
-          if (insertErr && (insertErr.message?.includes('column') || insertErr.code === 'PGRST204')) {
-            // Fallback insert without optional columns if column doesn't exist
+          if (insertErr && cleanReplyTo) {
+            // Try stringifying reply_to in case column is TEXT
+            insertData.reply_to = JSON.stringify(cleanReplyTo);
+            const retryReply = await client.from('messages').insert([insertData]);
+            if (!retryReply.error) {
+              insertErr = null;
+            }
+          }
+
+          if (insertErr) {
+            // Fallback insert with essential columns if schema lacks optional columns or payload fails
             const fallbackData = {
               id: newMsg.id,
               nickname: newMsg.nickname,
@@ -428,48 +530,28 @@ export function useGlobalChat(
               content: newMsg.content,
               avatar_color: newMsg.avatar_color
             };
-            const retry = await client.from('messages').insert([fallbackData]);
-            insertErr = retry.error;
+            const retryFallback = await client.from('messages').insert([fallbackData]);
+            insertErr = retryFallback.error;
           }
 
           if (insertErr) {
-            console.error('Supabase insert error:', insertErr);
-            return { success: false, error: insertErr.message };
+            console.error('Supabase DB insert warning:', insertErr);
           }
-
-          if (supabaseChannelRef.current) {
-            supabaseChannelRef.current.send({
-              type: 'broadcast',
-              event: 'new_message',
-              payload: newMsg
-            });
-          }
-
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
 
           return { success: true };
         } catch (err: unknown) {
-          console.error('Failed to send message:', err);
-          return { success: false, error: err instanceof Error ? err.message : 'Network error' };
+          console.error('Failed to persist message to DB:', err);
+          return { success: true }; // Message delivered via broadcast
         }
       } else {
-        setMessages((prev) => {
-          const updated = [...prev, newMsg];
-          localStorage.setItem(LOCAL_STORAGE_MESSAGES_KEY, JSON.stringify(updated.slice(-100)));
-          return updated;
-        });
-
-        if (broadcastChannelRef.current) {
-          broadcastChannelRef.current.postMessage({ type: 'NEW_MESSAGE', message: newMsg });
-        }
-
+        localStorage.setItem(
+          LOCAL_STORAGE_MESSAGES_KEY,
+          JSON.stringify(messages.concat(newMsg).slice(-100))
+        );
         return { success: true };
       }
     },
-    [currentNickname, visitorId, avatarUrl, sendTypingSignal]
+    [visitorId, sendTypingSignal, messages]
   );
 
   // Load older messages for pagination
@@ -491,7 +573,22 @@ export function useGlobalChat(
         .limit(30);
 
       if (!error && data && data.length > 0) {
-        const older = data.reverse() as Message[];
+        const older = data.reverse().map((item) => {
+          let replyToObj = item.reply_to;
+          if (typeof replyToObj === 'string') {
+            try {
+              replyToObj = JSON.parse(replyToObj);
+            } catch {
+              replyToObj = undefined;
+            }
+          }
+          return {
+            ...item,
+            avatar_url: item.avatar_url || undefined,
+            reply_to: replyToObj
+          } as Message;
+        });
+
         setMessages((prev) => [...older, ...prev]);
         setHasMoreOlder(data.length >= 30);
       } else {

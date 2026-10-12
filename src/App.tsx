@@ -125,6 +125,17 @@ export default function App() {
     localStorage.setItem('plug_chat_bg_opacity', String(opacity));
   }, []);
 
+  // Map online users' avatars for instant fallback lookup on messages
+  const userAvatarsMap = new Map<string, string>();
+  if (avatarUrl) {
+    userAvatarsMap.set(visitorId, avatarUrl);
+  }
+  onlineUsers.forEach((u) => {
+    if (u.visitor_id && u.avatar_url) {
+      userAvatarsMap.set(u.visitor_id, u.avatar_url);
+    }
+  });
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#131314] text-[#e3e2e6] antialiased font-['Google_Sans_Text','Google_Sans',sans-serif]">
       
@@ -154,6 +165,7 @@ export default function App() {
           currentVisitorId={visitorId}
           currentNickname={nickname}
           currentUserAvatarUrl={avatarUrl}
+          userAvatarsMap={userAvatarsMap}
           hasMoreOlder={hasMoreOlder}
           isLoadingOlder={isLoadingOlder}
           onLoadOlder={loadOlderMessages}
